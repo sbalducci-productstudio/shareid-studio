@@ -1,0 +1,243 @@
+/* ===================================================================
+   ShareID Design System — Tokens
+   Source of truth: Constants.swift, TypographyType.swift, colors.json v2.1
+   Primitives mirror code exactly. Semantics map onto primitives.
+   =================================================================== */
+
+@font-face {
+  font-family: "Roboto";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("fonts/Roboto-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Roboto";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("fonts/Roboto-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Roboto";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("fonts/Roboto-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Roboto Mono";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("fonts/RobotoMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Roboto Mono";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("fonts/RobotoMono-Medium.woff2") format("woff2");
+}
+
+:root {
+  /* ------------------------------------------------------------------
+     PRIMITIVES — bound to code
+     ------------------------------------------------------------------ */
+
+  /* colors.json v2.1 */
+  --color-main: #3253D1;
+  --color-success: #2EC834;
+  --color-error: #DD6342;
+  --color-red: #FF0000;
+  --color-black: #000000;
+  --color-white: #FFFFFF;
+  --color-gray: #B6B8BB;
+  --color-light-gray: #EBEBEB;
+
+  /* Constants.swift → Spacing */
+  --space-xxs: 2.5px;
+  --space-xs: 5px;
+  --space-s: 10px;
+  --space-m: 20px;
+  --space-l: 30px;
+  --space-xl: 40px;
+  --space-xxl: 50px;
+
+  /* Constants.swift → Sizes.cornerRadius */
+  --radius-default: 15px;
+  /* Figma drift — not yet code-bound */
+  --radius-button-rectangular: 8px;
+  --radius-button-pill: 24px;
+  --radius-pill-full: 9999px;
+
+  /* TypographyType.swift — Roboto */
+  --font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --font-size-28: 28px;
+  --font-size-22: 22px;
+  --font-size-20: 20px;
+  --font-size-18: 18px;
+  --font-size-16: 16px;
+  --font-size-14: 14px;
+  --font-size-12: 12px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* Code does not set line-height — falls back to Roboto's intrinsic ~1.15–1.2.
+     Use these for screens that need an explicit value. */
+  --line-tight: 1.15;
+  --line-normal: 1.4;
+  --line-loose: 1.5;
+
+  /* ------------------------------------------------------------------
+     SEMANTICS — draft, pending sign-off
+     Components consume these. Never primitives directly.
+     ------------------------------------------------------------------ */
+
+  /* Surfaces */
+  --surface-primary: var(--color-white);          /* default screen / card */
+  --surface-secondary: var(--color-light-gray);   /* neutral inputs, selectors */
+  --surface-brand-primary: var(--color-main);     /* primary buttons, active fill */
+  --surface-success: var(--color-success);
+  --surface-error: var(--color-error);
+  --surface-critical: var(--color-red);           /* destructive — rare */
+  --surface-inverse: var(--color-black);          /* dark overlays, tip pills */
+
+  /* Borders */
+  --border-default: var(--color-light-gray);
+  --border-strong: #DEDEE2;
+  --border-focus: var(--color-main);
+
+  /* Text */
+  --text-primary: var(--color-black);
+  --text-secondary: var(--color-gray);
+  --text-on-brand: var(--color-white);
+  --text-link: var(--color-main);
+  --text-error: var(--color-error);
+
+  /* Icons */
+  --icon-default: var(--color-main);
+  --icon-inverse: var(--color-white);
+  --icon-muted: var(--color-gray);
+
+  /* Page chrome (not in code — sdk-wide convention) */
+  --page-bg: var(--color-white);
+  --hairline: var(--color-light-gray);
+
+  /* ------------------------------------------------------------------
+     SEMANTIC TYPOGRAPHY — maps onto code styles
+     ------------------------------------------------------------------ */
+  --text-heading-xl-size: var(--font-size-28);     /* h1 — Bold */
+  --text-heading-l-size: var(--font-size-20);      /* h2 — Bold */
+  --text-heading-m-size: var(--font-size-18);      /* h3 — Bold */
+  --text-heading-s-size: var(--font-size-16);      /* h4 — Bold */
+  --text-headline-size: var(--font-size-22);       /* largeText — Medium */
+  --text-button-size: var(--font-size-18);         /* button — Medium */
+  --text-emphasis-size: var(--font-size-16);       /* strong — Medium */
+  --text-body-default-size: var(--font-size-16);   /* body1 — Regular */
+  --text-body-secondary-size: var(--font-size-14); /* body2 — Regular */
+  --text-caption-size: var(--font-size-12);        /* body3 — Regular */
+
+  /* ------------------------------------------------------------------
+     SEMANTIC SPACING — Figma alias of code spacing
+     ------------------------------------------------------------------ */
+  --gap-xs: var(--space-xs);      /* 5  */
+  --gap-s: var(--space-s);        /* 10 */
+  --gap-m: var(--space-m);        /* 20 */
+  --gap-l: var(--space-l);        /* 30 */
+  --inset-xs: var(--space-xs);
+  --inset-s: var(--space-s);
+  --inset-m: var(--space-m);
+  --inset-l: var(--space-l);
+  --screen-edge: var(--space-l);  /* 30px horizontal padding from screen edge */
+
+  /* Components (no shadow system in code) */
+  --radius-card: var(--radius-default);
+  --radius-input: var(--radius-default);
+}
+
+/* ===================================================================
+   ELEMENT DEFAULTS — for documents using this stylesheet directly
+   =================================================================== */
+html {
+  font-family: var(--font-sans);
+  color: var(--text-primary);
+  background: var(--page-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings — map to TypographyType.swift */
+h1, .text-h1 {
+  font-family: var(--font-sans);
+  font-size: var(--text-heading-xl-size);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-tight);
+  margin: 0;
+}
+h2, .text-h2 {
+  font-family: var(--font-sans);
+  font-size: var(--text-heading-l-size);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-tight);
+  margin: 0;
+}
+h3, .text-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--text-heading-m-size);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-tight);
+  margin: 0;
+}
+h4, .text-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--text-heading-s-size);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-tight);
+  margin: 0;
+}
+
+.text-large {
+  font-size: var(--text-headline-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-normal);
+}
+.text-button {
+  font-size: var(--text-button-size);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+}
+.text-strong {
+  font-size: var(--text-emphasis-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-normal);
+}
+.text-body1, p {
+  font-size: var(--text-body-default-size);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-normal);
+  margin: 0;
+}
+.text-body2 {
+  font-size: var(--text-body-secondary-size);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-normal);
+}
+.text-body3, .text-caption {
+  font-size: var(--text-caption-size);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-normal);
+  color: var(--text-secondary);
+}
+
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Helpers */
+.muted { color: var(--text-secondary); }
+.brand-color { color: var(--color-main); }
