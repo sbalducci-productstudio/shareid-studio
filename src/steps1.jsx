@@ -11,14 +11,15 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
       label: "Console",
       items: [
         { id: "home", nm: "Accueil", icon: "home" },
-        { id: "stats", nm: "Statistiques & requêtes", icon: "activity" },
-        {
-          id: "build", nm: "Build", icon: "layers",
-          children: [
-            { id: "wf_builder", nm: "Workflow builder", badge: count || null },
-            { id: "biz_setup", nm: "Business setup" },
-          ],
-        },
+        { id: "stats", nm: "Statistiques", icon: "activity" },
+        { id: "requests", nm: "Requêtes", icon: "search" },
+      ],
+    },
+    {
+      label: "Build",
+      items: [
+        { id: "wf_builder", nm: "Workflow builder", icon: "layers", badge: count || null },
+        { id: "biz_setup", nm: "Business setup", icon: "globe" },
       ],
     },
     {
@@ -30,7 +31,6 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
       ],
     },
   ];
-  const buildOpen = active === "wf_builder" || active === "biz_setup";
   return (
     <aside className="dash-rail">
       <div className="rail-brand"><img src={import.meta.env.BASE_URL + "ds/logo-shareid.svg"} alt="ShareID" /><span className="crumb">Studio</span></div>
@@ -38,37 +38,13 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
         {groups.map((g) => (
           <div className="nav-group" key={g.label}>
             <div className="nav-group-l">{g.label}</div>
-            {g.items.map((n) => {
-              if (n.children) {
-                const parentActive = n.children.some((c) => c.id === active);
-                return (
-                  <div className="nav-parent-wrap" key={n.id}>
-                    <button className={"dash-nav-item" + (parentActive ? " parent-on" : "")} disabled>
-                      <Ico name={n.icon} size={17} sw={1.7} />
-                      <span className="nm">{n.nm}</span>
-                      <Ico name={buildOpen ? "chevUp" : "chevDown"} size={14} sw={1.9} />
-                    </button>
-                    {buildOpen && (
-                      <div className="nav-sub">
-                        {n.children.map((c) => (
-                          <button key={c.id} className={"dash-nav-sub-item" + (c.id === active ? " active" : "")} disabled={c.id !== active}>
-                            <span className="nm">{c.nm}</span>
-                            {c.badge ? <span className="navb">{c.badge}</span> : null}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              return (
-                <button key={n.id} className={"dash-nav-item" + (n.id === active ? " active" : "")} disabled={n.id !== active}>
-                  <Ico name={n.icon} size={17} sw={1.7} />
-                  <span className="nm">{n.nm}</span>
-                  {n.badge ? <span className="navb">{n.badge}</span> : null}
-                </button>
-              );
-            })}
+            {g.items.map((n) => (
+              <button key={n.id} className={"dash-nav-item" + (n.id === active ? " active" : "")} disabled={n.id !== active}>
+                <Ico name={n.icon} size={17} sw={1.7} />
+                <span className="nm">{n.nm}</span>
+                {n.badge ? <span className="navb">{n.badge}</span> : null}
+              </button>
+            ))}
           </div>
         ))}
       </nav>
@@ -89,6 +65,9 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
 
 export function Home({ workflows, onStart, onOpen, onQr }) {
   const empty = workflows.length === 0;
+  // Vue choisie (cartes / tableau), mémorisée entre les sessions.
+  const [view, setView] = React.useState(() => localStorage.getItem("wf_view") || "cards");
+  function pickView(v) { setView(v); try { localStorage.setItem("wf_view", v); } catch (e) {} }
   return (
     <div className="app">
       <div className="dash">
@@ -115,34 +94,81 @@ export function Home({ workflows, onStart, onOpen, onQr }) {
               <div className="wf-list">
                 <div className="wf-list-h">
                   <span>{workflows.length} workflow{workflows.length > 1 ? "s" : ""}</span>
+                  <div className="view-seg" role="tablist" aria-label="Affichage">
+                    <button className={"view-seg-b" + (view === "cards" ? " on" : "")} onClick={() => pickView("cards")} title="Vue cartes"><Ico name="grid" size={14} sw={1.9} />Cartes</button>
+                    <button className={"view-seg-b" + (view === "table" ? " on" : "")} onClick={() => pickView("table")} title="Vue tableau"><Ico name="rows" size={14} sw={1.9} />Tableau</button>
+                  </div>
                 </div>
-                <div className="wf-grid">
-                  {workflows.map((w, i) => {
-                    const lvl = achievedLevel(w) || effTarget(w);
-                    return (
-                      <button className="wf-card" key={i} onClick={() => onOpen(i)}>
-                        <div className="wf-card-top">
-                          <span className="ico-tile" style={{ width: 36, height: 36, borderRadius: 11 }}><Ico name="fileCheck" size={18} /></span>
-                          <span className={"mode-pill " + w.mode} style={{ margin: 0, fontSize: 10.5 }}><span className="d" />{w.mode === "live" ? "Live" : "Test"}</span>
-                        </div>
-                        <div className="wf-card-nm">{w.name || "Workflow sans titre"}</div>
-                        <div className="wf-card-meta">
-                          <EidasTag levelKey={lvl} prefix="" />
-                          <span className="wf-card-sub">{w.authentication ? "Onboarding + Authentification" : "Onboarding"}</span>
-                        </div>
-                        <div className="wf-card-foot">
-                          <span className="wf-open">Ouvrir<Ico name="chevR" size={14} sw={2} /></span>
-                          <span className="row-qr" onClick={(e) => { e.stopPropagation(); onQr(w); }} title="Afficher le QR de test"><Ico name="smartphone" size={13} sw={1.7} />QR</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  <button className="wf-card wf-card-new" onClick={onStart}>
-                    <div className="wf-new-ico"><Ico name="plus" size={20} sw={2} /></div>
-                    <span className="wf-new-t">Nouveau workflow</span>
-                    <span className="wf-new-s">Partez d'une configuration vierge</span>
-                  </button>
-                </div>
+                {view === "cards" ? (
+                  <div className="wf-grid">
+                    {workflows.map((w, i) => {
+                      const lvl = achievedLevel(w) || effTarget(w);
+                      return (
+                        <button className="wf-card" key={i} onClick={() => onOpen(i)}>
+                          <div className="wf-card-top">
+                            <span className="ico-tile" style={{ width: 36, height: 36, borderRadius: 11 }}><Ico name="fileCheck" size={18} /></span>
+                            <span className={"mode-pill " + w.mode} style={{ margin: 0, fontSize: 10.5 }}><span className="d" />{w.mode === "live" ? "Live" : "Test"}</span>
+                          </div>
+                          <div className="wf-card-nm">{w.name || "Workflow sans titre"}</div>
+                          <div className="wf-card-meta">
+                            <EidasTag levelKey={lvl} prefix="" />
+                            <span className="wf-card-sub">{w.authentication ? "Onboarding + Authentification" : "Onboarding"}</span>
+                          </div>
+                          <div className="wf-card-foot">
+                            <span className="wf-open">Ouvrir<Ico name="chevR" size={14} sw={2} /></span>
+                            <span className="row-qr" onClick={(e) => { e.stopPropagation(); onQr(w); }} title="Afficher le QR de test"><Ico name="smartphone" size={13} sw={1.7} />QR</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <button className="wf-card wf-card-new" onClick={onStart}>
+                      <div className="wf-new-ico"><Ico name="plus" size={20} sw={2} /></div>
+                      <span className="wf-new-t">Nouveau workflow</span>
+                      <span className="wf-new-s">Partez d'une configuration vierge</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="wf-table-wrap">
+                    <div className="wf-table-scroll">
+                      <table className="wf-table">
+                        <thead>
+                          <tr>
+                            <th>Nom</th>
+                            <th>Mode</th>
+                            <th>Niveau eIDAS</th>
+                            <th>Type</th>
+                            <th className="ta-r">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {workflows.map((w, i) => {
+                            const lvl = achievedLevel(w) || effTarget(w);
+                            return (
+                              <tr key={i} className="wf-row" onClick={() => onOpen(i)}>
+                                <td>
+                                  <div className="wf-row-nm">
+                                    <span className="ico-tile sm"><Ico name="fileCheck" size={16} /></span>
+                                    <span className="wf-row-t">{w.name || "Workflow sans titre"}</span>
+                                  </div>
+                                </td>
+                                <td><span className={"mode-pill " + w.mode} style={{ margin: 0, fontSize: 10.5 }}><span className="d" />{w.mode === "live" ? "Live" : "Test"}</span></td>
+                                <td><EidasTag levelKey={lvl} prefix="" /></td>
+                                <td><span className="wf-row-sub">{w.authentication ? "Onboarding + Authentification" : "Onboarding"}</span></td>
+                                <td className="ta-r">
+                                  <div className="wf-row-act">
+                                    <span className="row-qr" onClick={(e) => { e.stopPropagation(); onQr(w); }} title="Afficher le QR de test"><Ico name="smartphone" size={13} sw={1.7} />QR</span>
+                                    <span className="wf-row-open"><Ico name="chevR" size={16} sw={2} /></span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button className="wf-row-new" onClick={onStart}><Ico name="plus" size={15} sw={2.1} />Nouveau workflow</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -197,7 +223,7 @@ export function StepConfig({ cfg, set, stepNum, stepTotal }) {
       <div className="step-sep" />
 
       <section className="cfg-sec">
-        <div className="cfg-sec-h"><span className="cfg-sec-t">Quel niveau eIDAS visez-vous ?</span></div>
+        <div className="cfg-sec-h"><span className="cfg-sec-t">Quel est votre niveau de risque ?</span></div>
         <div className="opts g3" style={{ maxWidth: 660 }}>
           {LEVEL_KEYS.map((k) => {
             const sel = cfg.eidasTarget === k;
@@ -256,9 +282,11 @@ export function StepType({ cfg, set, stepNum, stepTotal }) {
 /* ---------------- Step 3 — Document ---------------- */
 export function StepDocument({ cfg, set, stepNum, stepTotal }) {
   function pick(m) {
-    set({ docMethod: m.id, pad: m.pad === "req", iad: m.id === "nfc_fallback" ? true : false });
+    set({ docMethod: m.id, pad: m.pad === "req", iad: false });
   }
   const method = DOC_METHODS.find((m) => m.id === cfg.docMethod);
+  // L'IAD (anti-deepfake) ne s'applique pas aux méthodes NFC : on masque la ligne.
+  const isNfc = method && (method.id === "nfc" || method.id === "nfc_fallback");
   const ach = achievedLevel(cfg);
   const coh = coherence(ach, effTarget(cfg));
   return (
@@ -284,7 +312,7 @@ export function StepDocument({ cfg, set, stepNum, stepTotal }) {
         <div style={{ maxWidth: 680, marginTop: 22 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}><span className="lab">Protections anti-fraude</span><span className="hint" style={{ color: "var(--muted-soft)" }}>dérivées de la méthode choisie</span></div>
           <PadIadRow id="pad" label="PAD — anti-spoofing" desc="Détection d'attaque par présentation sur le document." state={method.pad} on={cfg.pad} set={(v) => set({ pad: v })} />
-          <PadIadRow id="iad" label="IAD — anti-deepfake" desc="Détection d'attaque par injection sur le flux document." state={method.iad} on={cfg.iad} set={(v) => set({ iad: v })} />
+          {!isNfc && <PadIadRow id="iad" label="IAD — anti-deepfake" desc="Détection d'attaque par injection sur le flux document." state={method.iad} on={cfg.iad} set={(v) => set({ iad: v })} />}
         </div>
       ) : null}
 

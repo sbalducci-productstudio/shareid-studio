@@ -6,3 +6,4 @@ dist-ssr
 .vite
 
 .playwright-mcp
+.design-pull/
