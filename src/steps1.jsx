@@ -5,7 +5,7 @@ import {
   achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
 
-export function DashRail({ active = "wf_builder", count = 0 }) {
+export function DashRail({ active = "wf_builder", count = 0, onNav }) {
   const groups = [
     {
       label: "Console",
@@ -13,6 +13,8 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
         { id: "home", nm: "Accueil", icon: "home" },
         { id: "stats", nm: "Statistiques", icon: "activity" },
         { id: "requests", nm: "Requêtes", icon: "search" },
+        { id: "operator", nm: "File anti-fraude", icon: "shieldAlert" },
+        { id: "demo", nm: "Démo produit", icon: "play" },
       ],
     },
     {
@@ -39,7 +41,7 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
           <div className="nav-group" key={g.label}>
             <div className="nav-group-l">{g.label}</div>
             {g.items.map((n) => (
-              <button key={n.id} className={"dash-nav-item" + (n.id === active ? " active" : "")} disabled={n.id !== active}>
+              <button key={n.id} className={"dash-nav-item" + (n.id === active ? " active" : "")} onClick={() => onNav && onNav(n.id)}>
                 <Ico name={n.icon} size={17} sw={1.7} />
                 <span className="nm">{n.nm}</span>
                 {n.badge ? <span className="navb">{n.badge}</span> : null}
@@ -63,7 +65,7 @@ export function DashRail({ active = "wf_builder", count = 0 }) {
   );
 }
 
-export function Home({ workflows, onStart, onOpen, onQr }) {
+export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
   const empty = workflows.length === 0;
   // Vue choisie (cartes / tableau), mémorisée entre les sessions.
   const [view, setView] = React.useState(() => localStorage.getItem("wf_view") || "cards");
@@ -71,7 +73,7 @@ export function Home({ workflows, onStart, onOpen, onQr }) {
   return (
     <div className="app">
       <div className="dash">
-        <DashRail active="wf_builder" count={workflows.length} />
+        <DashRail active="wf_builder" count={workflows.length} onNav={onNav} />
         <div className="dash-main">
           <div className="dash-topbar">
             <div className="dt-head">

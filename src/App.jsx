@@ -1,22 +1,25 @@
-/* ShareID Studio — app shell: state, nav, rail+meter, footer, modal, persistence.
-   Note : le « Tweaks panel » du prototype était un outil du canvas Claude Design
-   (protocole postMessage vers l'hôte) — il n'a pas de rôle dans l'app réelle.
-   On applique simplement le thème par défaut (accent / densité / style de cartes). */
+/* ShareID Studio — app shell : état, navigation multi-sections, rail+meter, modales, persistance.
+   Note : le « Tweaks panel » du prototype était un outil du canvas Claude Design — retiré ici,
+   on applique simplement le thème par défaut (voir THEME). */
 import React from "react";
 import {
   Ico, STEPS, DEFAULT_CFG, LEVELS, LEVEL_KEYS, ZONES, BUSINESS_MAX_COUNTRIES,
   DOC_METHODS, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
-import { Home, StepConfig, StepType, StepDocument, StepFace } from "./steps1.jsx";
+import { DashRail, Home, StepConfig, StepType, StepDocument, StepFace } from "./steps1.jsx";
 import {
   StepReauth, StepScope, StepAdvanced, StepPreview, StepIntegration, newSession,
 } from "./steps2.jsx";
+import { ConsoleHome, ConsoleStats } from "./console.jsx";
+import { RequestsHistory, OperatorQueue } from "./requests.jsx";
+import { ManageUsers, ProductDemo } from "./admin.jsx";
+import { BizList, BizWizard, BizEdit } from "./biz.jsx";
+import { DEFAULT_BIZ } from "./biz-steps.jsx";
 
 const LS_KEY = "shareid_studio_v1";
 
-/* Thème par défaut (anciennement piloté par le Tweaks panel du canvas) */
+/* Thème par défaut (anciennement piloté par le Tweaks panel du canvas Claude Design). */
 const THEME = { accent: "#3253D1", density: "confort", cards: "epure" };
-
 function Meter({ cfg }) {
   const target = effTarget(cfg);
   const inherited = !cfg.eidasTarget;
@@ -29,14 +32,14 @@ function Meter({ cfg }) {
         </div>
       </div>
       <div className="bands">
-        {LEVEL_KEYS.map((k) => (
-          <div key={k} className={"band" + (k === target ? " target filled" : "")}>
+        {LEVEL_KEYS.map((k) =>
+        <div key={k} className={"band" + (k === target ? " target filled" : "")}>
             <span className="lv">{LEVELS[k].name}</span>{k === target && <span className="flag">{inherited ? "hérité" : "cible"}</span>}
           </div>
-        ))}
+        )}
       </div>
-    </div>
-  );
+    </div>);
+
 }
 
 function Rail({ cfg, currentKey, visibleKeys, onJump, onExit }) {
@@ -50,34 +53,67 @@ function Rail({ cfg, currentKey, visibleKeys, onJump, onExit }) {
       </div>
       <div className="steplist">
         {visSteps.map((s, i) => {
-          const done = i < curIdx, active = i === curIdx;
+          const done = i < curIdx,active = i === curIdx;
           const cls = "step" + (done ? " done clickable" : "") + (active ? " active" : "");
           return (
             <button key={s.key} className={cls} disabled={!done} onClick={() => done && onJump(s.key)}>
               <span className="idx">{done ? <Ico name="check" size={12} sw={3} /> : i + 1}</span>
               <span className="nm">{s.nm}</span>
-            </button>
-          );
+            </button>);
+
         })}
       </div>
       <Meter cfg={cfg} />
-    </aside>
-  );
+    </aside>);
+
+}
+
+function Shell({ section, count, onNav, children }) {
+  return (
+    <div className="app">
+      <div className="dash">
+        <DashRail active={section} count={count} onNav={onNav} />
+        <div className="dash-main">{children}</div>
+      </div>
+    </div>);
+}
+
+function Placeholder({ section }) {
+  const meta = {
+    users: { icon: "users", t: "Utilisateurs", d: "Gestion des utilisateurs du business : rôles, invitations, magic-links et logs de connexion." },
+    business: { icon: "building", t: "Entreprise", d: "Paramètres de l'organisation et de la hiérarchie business." },
+    settings: { icon: "settings", t: "Paramètres", d: "Préférences du Studio, clés API et intégrations." },
+  }[section] || { icon: "info", t: "Bientôt", d: "" };
+  return (
+    <React.Fragment>
+      <div className="dash-topbar"><div className="dt-head"><div className="eyebrow">Admin</div><h1>{meta.t}</h1></div></div>
+      <div className="dash-body">
+        <div className="dash-empty">
+          <div className="biz-empty-ico"><Ico name={meta.icon} size={26} /></div>
+          <h2>{meta.t}</h2>
+          <p className="biz-empty-sub">{meta.d}</p>
+          <span className="chip" style={{ marginTop: 18 }}>À venir dans une prochaine itération</span>
+        </div>
+      </div>
+    </React.Fragment>);
 }
 
 function App() {
   const { useState, useEffect } = React;
-  const saved = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (e) { return {}; } })();
-  const [view, setView] = useState(saved.view || "home");        // home | wizard | done
+  const saved = (() => {try {return JSON.parse(localStorage.getItem(LS_KEY)) || {};} catch (e) {return {};}})();
+  const [section, setSection] = useState(saved.section || "wf_builder"); // nav id
+  const [view, setView] = useState(saved.view || "home"); // wf_builder: home | wizard | done
   const [cfg, setCfg] = useState(saved.cfg || { ...DEFAULT_CFG });
   const [currentKey, setCurrentKey] = useState(saved.currentKey || "config");
   const [workflows, setWorkflows] = useState(saved.workflows || []);
+  const [businesses, setBusinesses] = useState(saved.businesses || []);
+  const [bizView, setBizView] = useState("list"); // list | wizard | edit
+  const [bizDraft, setBizDraft] = useState(() => ({ ...DEFAULT_BIZ }));
+  const [bizEditIdx, setBizEditIdx] = useState(-1);
   const [liveModal, setLiveModal] = useState(false);
-  const [qrWf, setQrWf] = useState(null);   // workflow object shown in QR modal
+  const [qrWf, setQrWf] = useState(null); // workflow object shown in QR modal
   const [qrSession, setQrSession] = useState("");
-  function openQr(w) { setQrSession(newSession()); setQrWf(w); }
-
-  // Applique le thème par défaut une fois au montage.
+  function openQr(w) {setQrSession(newSession());setQrWf(w);}
   useEffect(() => {
     const r = document.documentElement;
     r.style.setProperty("--color-main", THEME.accent);
@@ -86,80 +122,98 @@ function App() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify({ view, cfg, currentKey, workflows })); } catch (e) {}
-  }, [view, cfg, currentKey, workflows]);
+    try {localStorage.setItem(LS_KEY, JSON.stringify({ section, view, cfg, currentKey, workflows, businesses }));} catch (e) {}
+  }, [section, view, cfg, currentKey, workflows, businesses]);
+
+  function navTo(id) {
+    setSection(id);
+    if (id === "biz_setup") setBizView("list");
+    if (id === "wf_builder") setView("home");
+  }
+
+  /* business setup handlers */
+  function bizStartNew() { setBizDraft({ ...DEFAULT_BIZ }); setBizView("wizard"); }
+  function bizOpen(i) { setBizEditIdx(i); setBizView("edit"); }
+  function bizFinish() {
+    setBusinesses((b) => [...b, { ...bizDraft, name: bizDraft.name || "Business sans nom", conso: 0, modified: "à l'instant" }]);
+    setBizView("list");
+  }
+  function bizSave(updated) {
+    setBusinesses((b) => b.map((x, i) => i === bizEditIdx ? { ...updated, modified: "à l'instant" } : x));
+    setBizView("list");
+  }
 
   const set = (patch) => setCfg((c) => ({ ...c, ...patch }));
   const visibleKeys = STEPS.filter((s) => !s.cond || s.cond(cfg)).map((s) => s.key);
   const curIdx = visibleKeys.indexOf(currentKey);
 
-  function startNew() { setCfg({ ...DEFAULT_CFG }); setCurrentKey("config"); setView("wizard"); }
-  function exitToHome() { setView("home"); }
-  function openWorkflow(i) { const w = workflows[i]; if (!w) return; setCfg({ ...DEFAULT_CFG, ...w }); setCurrentKey("integration"); setView("wizard"); }
+  function startNew() {setCfg({ ...DEFAULT_CFG });setCurrentKey("config");setView("wizard");}
+  function exitToHome() {setView("home");}
+  function openWorkflow(i) {const w = workflows[i];if (!w) return;setCfg({ ...DEFAULT_CFG, ...w });setCurrentKey("integration");setView("wizard");}
 
   /* per-step validity + footer */
-  const total = (() => { const z = cfg.zones.reduce((s, zz) => s + (ZONES.find((Z) => Z.id === zz)?.n || 0), 0); return Math.min(BUSINESS_MAX_COUNTRIES, z + cfg.countries.length); })();
+  const total = (() => {const z = cfg.zones.reduce((s, zz) => s + (ZONES.find((Z) => Z.id === zz)?.n || 0), 0);return Math.min(BUSINESS_MAX_COUNTRIES, z + cfg.countries.length);})();
   const canNext = {
     config: cfg.name.trim().length > 0 && cfg.drivers.length >= 1,
     type: true, document: !!cfg.docMethod, face: !!cfg.faceLevel, reauth: true,
-    scope: cfg.scopeSource === "inherited" || total > 0, advanced: true, preview: true, integration: true,
+    scope: cfg.scopeSource === "inherited" || total > 0, advanced: true, preview: true, integration: true
   }[currentKey];
 
   const ctaLabel = { advanced: "Aperçu", preview: "Continuer vers l'intégration", integration: "Valider & générer le pack" }[currentKey] || "Continuer";
 
   function goNext() {
-    if (currentKey === "integration") { finalize(); return; }
+    if (currentKey === "integration") {finalize();return;}
     const next = visibleKeys[curIdx + 1];
     if (next) setCurrentKey(next);
   }
   function goBack() {
-    if (curIdx <= 0) { exitToHome(); return; }
+    if (curIdx <= 0) {exitToHome();return;}
     setCurrentKey(visibleKeys[curIdx - 1]);
   }
   function finalize() {
     setWorkflows((w) => [...w, { ...cfg, name: cfg.name || "Workflow sans titre" }]);
     setView("done");
   }
-  function requestLive() { setLiveModal(true); }
-  function confirmLive() { set({ mode: "live" }); setLiveModal(false); }
+  function requestLive() {setLiveModal(true);}
+  function confirmLive() {set({ mode: "live" });setLiveModal(false);}
 
   const ach = achievedLevel(cfg);
   const cohObj = coherence(ach, effTarget(cfg));
-  const sNum = curIdx + 1, sTot = visibleKeys.length;
+  const sNum = curIdx + 1,sTot = visibleKeys.length;
 
   /* footer summary per step */
   function footerSummary() {
     switch (currentKey) {
-      case "config": return <span className="eidas-tag subst">{cfg.eidasTarget ? "Cible · " : "Cible héritée · "}{LEVELS[effTarget(cfg)].name}</span>;
-      case "type": return cfg.authentication ? <span className="chip brand sm" style={{ fontSize: 11 }}>+ Réauthentification débloquée</span> : <span className="hint">Onboarding seul</span>;
-      case "document": case "face": case "preview":
+      case "config":return <span className="eidas-tag subst">{cfg.eidasTarget ? "Cible · " : "Cible héritée · "}{LEVELS[effTarget(cfg)].name}</span>;
+      case "type":return cfg.authentication ? <span className="chip brand sm" style={{ fontSize: 11 }}>+ Réauthentification débloquée</span> : <span className="hint">Onboarding seul</span>;
+      case "document":case "face":case "preview":
         return ach ? <React.Fragment><EidasTag levelKey={ach} prefix="Atteint" />{cohObj && <span className={"coh " + cohObj.cls}>{cohObj.label}</span>}</React.Fragment> : <span className="hint">Choisissez une méthode</span>;
-      case "reauth": { const n = cfg.reauthOrder.filter((id) => cfg.reauthOn[id]).length; return <span className="chip brand sm" style={{ fontSize: 11 }}>{n + " méthode" + (n > 1 ? "s" : "") + " active" + (n > 1 ? "s" : "")}</span>; }
-      case "scope": return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.scopeSource === "inherited" ? "Hérité du business" : total + " pays · " + cfg.docTypes.length + " documents"}</span>;
-      case "advanced": return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.operatorReview ? "Avec opérateur" : "Sans opérateur"}{cfg.docMethod === "nfc_fallback" ? " · " + cfg.nfcRetry + " essais NFC" : ""}</span>;
-      case "integration": return <span className={"mode-pill " + cfg.mode} style={{ fontSize: 11, margin: 0 }}><span className="d" />{cfg.mode === "live" ? "Live · facturé" : "Test · non facturé"}</span>;
-      default: return null;
+      case "reauth":{const n = cfg.reauthOrder.filter((id) => cfg.reauthOn[id]).length;return <span className="chip brand sm" style={{ fontSize: 11 }}>{n + " méthode" + (n > 1 ? "s" : "") + " active" + (n > 1 ? "s" : "")}</span>;}
+      case "scope":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.scopeSource === "inherited" ? "Hérité du business" : total + " pays · " + cfg.docTypes.length + " documents"}</span>;
+      case "advanced":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.operatorReview ? "Avec opérateur" : "Sans opérateur"}{cfg.docMethod === "nfc_fallback" ? " · " + cfg.nfcRetry + " essais NFC" : ""}</span>;
+      case "integration":return <span className={"mode-pill " + cfg.mode} style={{ fontSize: 11, margin: 0 }}><span className="d" />{cfg.mode === "live" ? "Live · facturé" : "Test · non facturé"}</span>;
+      default:return null;
     }
   }
 
   function renderStep() {
     const p = { cfg, set, stepNum: sNum, stepTotal: sTot };
     switch (currentKey) {
-      case "config": return <StepConfig {...p} />;
-      case "type": return <StepType {...p} />;
-      case "document": return <StepDocument {...p} />;
-      case "face": return <StepFace {...p} />;
-      case "reauth": return <StepReauth {...p} />;
-      case "scope": return <StepScope {...p} />;
-      case "advanced": return <StepAdvanced {...p} />;
-      case "preview": return <StepPreview {...p} />;
-      case "integration": return <StepIntegration {...p} requestLive={requestLive} />;
-      default: return null;
+      case "config":return <StepConfig {...p} />;
+      case "type":return <StepType {...p} />;
+      case "document":return <StepDocument {...p} />;
+      case "face":return <StepFace {...p} />;
+      case "reauth":return <StepReauth {...p} />;
+      case "scope":return <StepScope {...p} />;
+      case "advanced":return <StepAdvanced {...p} />;
+      case "preview":return <StepPreview {...p} />;
+      case "integration":return <StepIntegration {...p} requestLive={requestLive} />;
+      default:return null;
     }
   }
 
-  const qrModal = qrWf && (
-    <div className="scrim" onClick={() => setQrWf(null)}>
+  const qrModal = qrWf &&
+  <div className="scrim" onClick={() => setQrWf(null)}>
       <div className="modal qr-modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-x" onClick={() => setQrWf(null)} aria-label="Fermer"><Ico name="x" size={16} sw={2.2} /></button>
         <div className="qr-modal-head">
@@ -171,16 +225,35 @@ function App() {
         <div className="qr-modal-meta">Session <b>{qrSession}</b> · valable pour un onboarding</div>
         <div className="qr-modal-actions">
           <button className="sid-btn ghost" onClick={() => setQrSession(newSession())}><Ico name="refresh" size={14} sw={2} />Rafraîchir</button>
-          <button className="sid-btn primary" onClick={() => { const idx = workflows.indexOf(qrWf); setQrWf(null); if (idx >= 0) openWorkflow(idx); }}>Ouvrir l'intégration</button>
+          <button className="sid-btn primary" onClick={() => {const idx = workflows.indexOf(qrWf);setQrWf(null);if (idx >= 0) openWorkflow(idx);}}>Ouvrir l'intégration</button>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 
-  if (view === "home") return <React.Fragment><Home workflows={workflows} onStart={startNew} onOpen={openWorkflow} onQr={openQr} />{qrModal}</React.Fragment>;
+
+  if (section === "wf_builder" && view === "home") return <React.Fragment><Home workflows={workflows} onStart={startNew} onOpen={openWorkflow} onQr={openQr} onNav={navTo} />{qrModal}</React.Fragment>;
+
+  /* business setup section */
+  if (section === "biz_setup") {
+    if (bizView === "wizard") return <React.Fragment><BizWizard draft={bizDraft} setDraft={setBizDraft} onFinish={bizFinish} onExit={() => setBizView("list")} /></React.Fragment>;
+    return <React.Fragment><Shell section={section} count={workflows.length} onNav={navTo}>
+      {bizView === "edit" && businesses[bizEditIdx] ?
+        <BizEdit biz={businesses[bizEditIdx]} onSave={bizSave} onBack={() => setBizView("list")} /> :
+        <BizList businesses={businesses} onCreate={bizStartNew} onOpen={bizOpen} />}
+    </Shell></React.Fragment>;
+  }
+
+  /* console + admin sections (rendered inside the shell) */
+  if (section !== "wf_builder") {
+    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers }[section];
+    return <React.Fragment><Shell section={section} count={workflows.length} onNav={navTo}>
+      {Console ? <Console onNav={navTo} /> : <Placeholder section={section} />}
+    </Shell></React.Fragment>;
+  }
 
   if (view === "done") {
     return (
+      <React.Fragment>
       <div className="done-screen">
         <div className="done-ico"><Ico name="check" size={30} sw={2.4} /></div>
         <h2>Workflow {cfg.mode === "live" ? "activé en live" : "prêt à tester"}</h2>
@@ -193,15 +266,18 @@ function App() {
           <div className="sr"><span className="sk">Mode</span><span className="sv">{cfg.mode === "live" ? "Live" : "Test"}</span></div>
         </div>
         <div className="done-actions">
-          <button className="sid-btn outline" onClick={() => { setCurrentKey("integration"); setView("wizard"); }}>Revoir l'intégration</button>
+          <button className="sid-btn outline" onClick={() => {setCurrentKey("integration");setView("wizard");}}>Revoir l'intégration</button>
           <button className="sid-btn primary" onClick={exitToHome}>Retour au studio</button>
         </div>
       </div>
-    );
+      
+      </React.Fragment>);
+
   }
 
   /* wizard */
   return (
+    <React.Fragment>
     <div className="app">
       <div className="wiz">
         <Rail cfg={cfg} currentKey={currentKey} visibleKeys={visibleKeys} onJump={setCurrentKey} onExit={exitToHome} />
@@ -220,7 +296,7 @@ function App() {
         </div>
       </div>
 
-      {liveModal && (
+      {liveModal &&
         <div className="scrim" onClick={() => setLiveModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="mi live"><Ico name="zap" size={22} fill /></div>
@@ -237,9 +313,11 @@ function App() {
             </div>
           </div>
         </div>
-      )}
+        }
     </div>
-  );
+    
+    </React.Fragment>);
+
 }
 
 export default App;
