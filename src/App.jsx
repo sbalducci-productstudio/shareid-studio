@@ -15,6 +15,8 @@ import { RequestsHistory, OperatorQueue } from "./requests.jsx";
 import { ManageUsers, ProductDemo } from "./admin.jsx";
 import { BizList, BizWizard, BizEdit } from "./biz.jsx";
 import { DEFAULT_BIZ } from "./biz-steps.jsx";
+import { canAccessSection, can } from "./access.js";
+import { useSession } from "./session.jsx";
 
 const LS_KEY = "shareid_studio_v1";
 
@@ -98,8 +100,33 @@ function Placeholder({ section }) {
     </React.Fragment>);
 }
 
+/* Section access order — used to pick a safe landing section for the active
+   role (e.g. after switching org). Mirrors the rail order. */
+const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "users", "business", "settings"];
+function firstAllowedSection(role) {
+  return SECTION_ORDER.find((s) => canAccessSection(role, s)) || "settings";
+}
+
+/* Route-guard equivalent: shown when the active role may not reach a section.
+   The rail already hides it; this is the second layer so a stale section id or
+   a direct state cannot leak a forbidden view. */
+function Denied({ role }) {
+  return (
+    <React.Fragment>
+      <div className="dash-topbar"><div className="dt-head"><div className="eyebrow">Accès</div><h1>Accès refusé</h1></div></div>
+      <div className="dash-body">
+        <div className="dash-empty">
+          <div className="biz-empty-ico"><Ico name="lock" size={26} /></div>
+          <h2>Cette section n'est pas accessible</h2>
+          <p className="biz-empty-sub">Votre rôle actuel ne dispose pas des droits requis pour cette section. Changez d'organisation depuis le menu du compte si vous y avez accès sous un autre rôle.</p>
+        </div>
+      </div>
+    </React.Fragment>);
+}
+
 function App() {
   const { useState, useEffect } = React;
+  const { role } = useSession();
   const saved = (() => {try {return JSON.parse(localStorage.getItem(LS_KEY)) || {};} catch (e) {return {};}})();
   const [section, setSection] = useState(saved.section || "wf_builder"); // nav id
   const [view, setView] = useState(saved.view || "home"); // wf_builder: home | wizard | done
@@ -124,6 +151,12 @@ function App() {
   useEffect(() => {
     try {localStorage.setItem(LS_KEY, JSON.stringify({ section, view, cfg, currentKey, workflows, businesses }));} catch (e) {}
   }, [section, view, cfg, currentKey, workflows, businesses]);
+
+  /* When the active role changes (org switch) and the current section is no
+     longer permitted, land on the first section this role can access. */
+  useEffect(() => {
+    if (!canAccessSection(role, section)) setSection(firstAllowedSection(role));
+  }, [role, section]);
 
   function navTo(id) {
     setSection(id);
@@ -176,7 +209,8 @@ function App() {
     setWorkflows((w) => [...w, { ...cfg, name: cfg.name || "Workflow sans titre" }]);
     setView("done");
   }
-  function requestLive() {setLiveModal(true);}
+  /* Toggle Test↔Live is gated to roles that may do it (access model). */
+  function requestLive() {if (can(role, "toggleLive")) setLiveModal(true);}
   function confirmLive() {set({ mode: "live" });setLiveModal(false);}
 
   const ach = achievedLevel(cfg);
@@ -237,6 +271,12 @@ function App() {
       </div>
     </div>;
 
+
+  /* Hard guard: if the active role cannot reach this section, render the denied
+     state (the redirect effect will move to a safe section on the next tick). */
+  if (!canAccessSection(role, section)) {
+    return <Shell section={section} count={workflows.length} onNav={navTo}><Denied role={role} /></Shell>;
+  }
 
   if (section === "wf_builder" && view === "home") return <React.Fragment><Home workflows={workflows} onStart={startNew} onOpen={openWorkflow} onQr={openQr} onNav={navTo} />{qrModal}</React.Fragment>;
 

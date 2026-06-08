@@ -4,12 +4,15 @@ import {
   Ico, DRIVERS, VERIF_TYPES, AUTH_SOURCES, SIGNATURE_LEVELS, CAPTURE_METHODS, captureLabel,
   FACE_PRESETS, LEVELS, LEVEL_KEYS, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
+import { canAccessSection } from "./access.js";
+import { useSession } from "./session.jsx";
 
 /* Libellé court du type de vérification d'un workflow (cartes / tableau). */
 function verifLabel(w) { return { onboarding: "Onboarding (IDV)", authentication: "Authentification", extraction: "Extraction de données" }[w.verifType] || "Onboarding (IDV)"; }
 function wfLevel(w) { return w.verifType === "extraction" ? "none" : (achievedLevel(w) || effTarget(w)); }
 
 export function DashRail({ active = "wf_builder", count = 0, onNav }) {
+  const { role } = useSession();
   const groups = [
     {
       label: "Console",
@@ -36,7 +39,10 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
         { id: "settings", nm: "Paramètres", icon: "settings" },
       ],
     },
-  ];
+  ]
+    // Gate the rail by the active role — only show sections this role can reach.
+    .map((g) => ({ ...g, items: g.items.filter((n) => canAccessSection(role, n.id)) }))
+    .filter((g) => g.items.length > 0);
   return (
     <aside className="dash-rail">
       <div className="rail-brand"><img src={import.meta.env.BASE_URL + "ds/logo-shareid.svg"} alt="ShareID" /><span className="crumb">Studio</span></div>
@@ -54,20 +60,55 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
           </div>
         ))}
       </nav>
-      <div className="dash-account">
-        <button className="dash-biz">
-          <span className="biz-mk">VE</span>
-          <span className="biz-info"><span className="biz-nm">Votre entreprise</span><span className="biz-env">Espace business</span></span>
-          <Ico name="chevDown" size={15} sw={1.8} />
-        </button>
-        <div className="dash-user">
-          <span className="ava">MB</span>
-          <span className="u-info"><span className="u-nm">Marie Bernard</span><span className="u-role">Admin</span></span>
-        </div>
-      </div>
+      <AccountSwitcher />
     </aside>
   );
 }
+
+/* Account block = org switcher + role impersonator. In production the active
+   (org, role) comes from the authenticated session; here it's a demo control so
+   every gating + PII rule can be exercised live. One role per org (access model). */
+function AccountSwitcher() {
+  const { user, orgs, org, roleMeta, entity, switchOrg } = useSession();
+  const [open, setOpen] = React.useState(false);
+  const initials = user.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const orgInitials = (org.nm || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  return (
+    <div className="dash-account" style={{ position: "relative" }}>
+      {open && (
+        <div className="combo-pop" style={{ bottom: 64, left: 12, right: 12, maxHeight: 320, overflowY: "auto" }}>
+          <div className="nav-group-l" style={{ padding: "4px 10px" }}>Changer d'organisation · rôle</div>
+          {orgs.map((o) => (
+            <button key={o.id} className="combo-opt" style={{ alignItems: "flex-start", gap: 8 }}
+              onClick={() => { switchOrg(o.id); setOpen(false); }}>
+              <span className={"mark sq"} style={o.id === org.id ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}>
+                <Ico name="check" size={11} sw={3} style={{ opacity: o.id === org.id ? 1 : 0 }} />
+              </span>
+              <span style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                <span style={{ fontSize: 12.5 }}>{o.nm}</span>
+                <span className="hint" style={{ fontSize: 10.5 }}>{ENTITY_LABEL[o.entity]} · {ROLE_LABEL[o.role]}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button className="dash-biz" onClick={() => setOpen((v) => !v)}>
+        <span className="biz-mk">{orgInitials}</span>
+        <span className="biz-info"><span className="biz-nm">{org.nm}</span><span className="biz-env">{entity.nm}</span></span>
+        <Ico name="chevDown" size={15} sw={1.8} />
+      </button>
+      <div className="dash-user">
+        <span className="ava">{initials}</span>
+        <span className="u-info"><span className="u-nm">{user.name}</span><span className="u-role">{roleMeta.nm}</span></span>
+      </div>
+    </div>
+  );
+}
+const ENTITY_LABEL = { shareid: "ShareID", business: "Business", group: "Groupe", retailer: "Retailer" };
+const ROLE_LABEL = {
+  sid_admin: "ShareID Admin", sid_sales: "ShareID Sales", retailer_admin: "Retailer Admin",
+  group_admin: "Group Admin", biz_admin: "Business Admin", agent: "Agent", operator: "Operator", expert: "Expert",
+};
 
 export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
   const empty = workflows.length === 0;

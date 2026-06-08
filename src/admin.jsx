@@ -3,18 +3,16 @@
 
 import React from "react";
 import { EidasTag, Ico } from "./core.jsx";
+import { ROLES, creatableRoles } from "./access.js";
+import { useSession } from "./session.jsx";
 
-const ROLE_META = {
-  ba: { nm: "Business Admin", cls: "role-ba" },
-  agent: { nm: "Agent", cls: "role-agent" },
-  operator: { nm: "Operator", cls: "role-op" },
-  expert: { nm: "Expert", cls: "role-expert" },
-  sales: { nm: "Sales", cls: "role-sales" },
-};
+/* Role display metadata is derived from the access-model SSoT so labels/keys
+   never drift from the canonical roles. */
+const ROLE_META = ROLES;
 const USER_STATUS = { active: { nm: "Actif", cls: "active" }, disabled: { nm: "Désactivé", cls: "fail" }, pending: { nm: "En attente", cls: "review" } };
 
 const USERS_SEED = [
-  { id: "u1", name: "Marie Bernard", email: "marie.bernard@atlas.io", role: "ba", owner: true, biz: ["Néobanque Atlas"], created: "2026-01-14", status: "active", last: "il y a 2 h", mfa: true },
+  { id: "u1", name: "Marie Bernard", email: "marie.bernard@atlas.io", role: "biz_admin", owner: true, biz: ["Néobanque Atlas"], created: "2026-01-14", status: "active", last: "il y a 2 h", mfa: true },
   { id: "u2", name: "Lucas Petit", email: "lucas.petit@atlas.io", role: "agent", biz: ["Néobanque Atlas"], created: "2026-02-03", status: "active", last: "hier", mfa: true },
   { id: "u3", name: "Sofia Nguyen", email: "sofia.nguyen@atlas.io", role: "operator", biz: ["Néobanque Atlas"], created: "2026-02-20", status: "active", last: "il y a 18 min", mfa: true },
   { id: "u4", name: "Karim Haddad", email: "karim.haddad@atlas.io", role: "expert", biz: ["Néobanque Atlas"], created: "2026-03-01", status: "active", last: "il y a 3 j", mfa: true },
@@ -25,6 +23,8 @@ function userInitials(n) { return n.split(" ").map((w) => w[0]).slice(0, 2).join
 
 /* ----------------------------- Manage Users ----------------------------- */
 export function ManageUsers() {
+  const { role: myRole } = useSession();
+  const creatable = creatableRoles(myRole); // USER-CREATION RULE — roles I may grant
   const [users, setUsers] = React.useState(USERS_SEED);
   const [q, setQ] = React.useState("");
   const [role, setRole] = React.useState("all");
@@ -37,11 +37,14 @@ export function ManageUsers() {
     (status === "all" || u.status === status));
   function update(id, patch) { setUsers((us) => us.map((u) => u.id === id ? { ...u, ...patch } : u)); setSel((s) => s && s.id === id ? { ...s, ...patch } : s); }
   function addUser(u) { setUsers((us) => [...us, u]); setInvite(false); }
+  /* Ownership transfer — a single owner, transferable, never recreated: flip
+     the owner flag from the current owner to the target user. */
+  function transferOwnership(id) { setUsers((us) => us.map((u) => ({ ...u, owner: u.id === id }))); setSel((s) => s && { ...s, owner: s.id === id }); }
   return (
     <React.Fragment>
       <div className="dash-topbar">
         <div className="dt-head"><div className="eyebrow">Admin</div><h1>Utilisateurs</h1></div>
-        <button className="sid-btn primary" onClick={() => setInvite(true)}><Ico name="plus" size={16} sw={2.2} />Ajouter un utilisateur</button>
+        {creatable.length > 0 && <button className="sid-btn primary" onClick={() => setInvite(true)}><Ico name="plus" size={16} sw={2.2} />Ajouter un utilisateur</button>}
       </div>
       <div className="dash-body console-body">
         <div className="filter-row">
@@ -51,7 +54,7 @@ export function ManageUsers() {
           </div>
           <div className="ctrl-div" />
           <span className="ctrl-lab">Rôle</span>
-          {[["all", "Tous"], ["ba", "Admin"], ["agent", "Agent"], ["operator", "Operator"], ["expert", "Expert"]].map(([id, nm]) =>
+          {[["all", "Tous"], ["biz_admin", "Admin"], ["agent", "Agent"], ["operator", "Operator"], ["expert", "Expert"]].map(([id, nm]) =>
             <button key={id} className={"filter-chip" + (role === id ? " on" : "")} onClick={() => setRole(id)}>{nm}</button>)}
           <div className="ctrl-div" />
           <span className="ctrl-lab">Statut</span>
@@ -80,14 +83,17 @@ export function ManageUsers() {
           </div>
         </div>
       </div>
-      {sel && <UserDrawer u={sel} onClose={() => setSel(null)} onUpdate={update} />}
-      {invite && <InviteModal onClose={() => setInvite(false)} onAdd={addUser} />}
+      {sel && <UserDrawer u={sel} creatable={creatable} onClose={() => setSel(null)} onUpdate={update} onTransfer={transferOwnership} />}
+      {invite && <InviteModal creatable={creatable} onClose={() => setInvite(false)} onAdd={addUser} />}
     </React.Fragment>);
 }
 
-function UserDrawer({ u, onClose, onUpdate }) {
+function UserDrawer({ u, creatable = [], onClose, onUpdate, onTransfer }) {
   const rm = ROLE_META[u.role], sm = USER_STATUS[u.status];
-  const roles = [["ba", "Business Admin"], ["agent", "Agent"], ["operator", "Operator"], ["expert", "Expert"]];
+  /* Assignable roles follow the user-creation rule; always include the user's
+     current role so it stays selected/visible even if not otherwise creatable. */
+  const roleIds = Array.from(new Set([u.role, ...creatable]));
+  const roles = roleIds.map((id) => [id, ROLE_META[id]?.nm || id]);
   return (
     <div className="drawer-scrim" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
@@ -122,6 +128,8 @@ function UserDrawer({ u, onClose, onUpdate }) {
         </div>
         <div className="drawer-foot op-foot">
           <button className="sid-btn ghost"><Ico name="refresh" size={14} sw={1.9} />Forcer reset MFA</button>
+          {!u.owner && u.status === "active" && onTransfer &&
+            <button className="sid-btn ghost" onClick={() => onTransfer(u.id)}><Ico name="key" size={14} sw={1.9} />Transférer la propriété</button>}
           <div style={{ flex: 1 }} />
           {u.status === "disabled" ?
             <button className="sid-btn outline" onClick={() => onUpdate(u.id, { status: "active" })}>Réactiver</button> :
@@ -131,10 +139,11 @@ function UserDrawer({ u, onClose, onUpdate }) {
     </div>);
 }
 
-function InviteModal({ onClose, onAdd }) {
+function InviteModal({ creatable = [], onClose, onAdd }) {
   const [email, setEmail] = React.useState("");
-  const [role, setRole] = React.useState("agent");
-  const valid = /\S+@\S+\.\S+/.test(email);
+  // Default to the lowest-privilege creatable role (Agent if available).
+  const [role, setRole] = React.useState(() => creatable.includes("agent") ? "agent" : creatable[0]);
+  const valid = /\S+@\S+\.\S+/.test(email) && !!role;
   function send() {
     onAdd({ id: "u" + Date.now(), name: email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), email, role, biz: ["Néobanque Atlas"], created: "à l'instant", status: "pending", last: "—", mfa: false });
   }
@@ -147,7 +156,7 @@ function InviteModal({ onClose, onAdd }) {
         <p>Un magic-link sera envoyé. L'invitation expire après 7 jours et reste renvoyable.</p>
         <div className="field" style={{ marginTop: 16 }}><span className="lab">Email</span><input className="inp" value={email} placeholder="prenom.nom@entreprise.com" onChange={(e) => setEmail(e.target.value)} autoFocus /></div>
         <div className="field" style={{ marginTop: 14 }}><span className="lab">Rôle</span>
-          <div className="role-picker">{[["agent", "Agent"], ["ba", "Business Admin"], ["operator", "Operator"], ["expert", "Expert"]].map(([id, nm]) => <button key={id} className={"role-opt" + (role === id ? " on" : "")} onClick={() => setRole(id)}>{nm}</button>)}</div>
+          <div className="role-picker">{creatable.map((id) => <button key={id} className={"role-opt" + (role === id ? " on" : "")} onClick={() => setRole(id)}>{ROLE_META[id]?.nm || id}</button>)}</div>
         </div>
         <div className="mactions" style={{ marginTop: 22 }}>
           <button className="sid-btn ghost" onClick={onClose}>Annuler</button>
