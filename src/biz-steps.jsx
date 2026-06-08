@@ -4,6 +4,8 @@
 import React from "react";
 import { fmt } from "./charts.jsx";
 import { DOC_TYPES, DocArt, Ico, LEVELS, RISK_KEYS } from "./core.jsx";
+import { can } from "./access.js";
+import { useSession } from "./session.jsx";
 
 /* ----------------------------- constants ----------------------------- */
 /* L'unité atomique d'un business = une ENTITÉ (une société unique, ex. Crédit du Maroc).
@@ -469,11 +471,20 @@ function SimCard({ tone, title, lines }) {
     </div>);
 }
 export function BizBilling({ biz, set, n, total }) {
+  const { role } = useSession();
+  const canSetTokenCost = can(role, "configureTokenCost"); // ShareID Admin only
   const pkg = pkgOf(biz.pkg);
   const annual = biz.billingMode !== "payg";
   return (
     <div className="body-inner wide step-anim">
       <BizHead n={n} total={total} title="Facturation" sub="Un jeton = une vérification, identique pour tous. Choisissez le mode de facturation ; le coût du jeton est paramétrable selon le setup." />
+      {/* Le COÛT du jeton (tarif par setup) n'est modifiable que par un ShareID Admin. */}
+      <div className={"note" + (canSetTokenCost ? "" : " warn")} style={{ maxWidth: 760, marginBottom: 4 }}>
+        <span className="ico"><Ico name={canSetTokenCost ? "key" : "lock"} size={15} sw={1.9} /></span>
+        <div>{canSetTokenCost
+          ? "En tant que ShareID Admin, vous pouvez ajuster le coût unitaire du jeton pour ce setup. Les autres rôles le voient en lecture seule."
+          : "Le coût unitaire du jeton est défini par ShareID et affiché en lecture seule. Seul un ShareID Admin peut le modifier."}</div>
+      </div>
       {/* §7 — deux modes réels : package annuel ou pay-as-you-go. Plus d'offre mensuelle. */}
       <div className="bill-modes">
         <button className={"bill-mode" + (annual ? " sel" : "")} onClick={() => set({ billingMode: "annual" })}>
