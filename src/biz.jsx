@@ -2,7 +2,7 @@
 
 
 import React from "react";
-import { BIZ_TYPES, BizBilling, BizCond, BizIdentity, BizObjective, BizRetention, BizReview, BizScope, BizType, BizUsers, EndUserPreview, RETENTION, TOKEN_PKGS, eur, flagOf, pkgOf, retLabel } from "./biz-steps.jsx";
+import { BIZ_COUNTRIES, BIZ_DRIVERS, BIZ_TYPES, BizBilling, BizCond, BizIdentity, BizObjective, BizRetention, BizReview, BizScope, BizType, BizUsers, DEFAULT_BIZ, EndUserPreview, RETENTION, TOKEN_PKGS, eur, flagOf, pkgOf, retLabel } from "./biz-steps.jsx";
 import { fmt, pct } from "./charts.jsx";
 import { DOC_TYPES, DocArt, EidasTag, Ico, LEVELS, RISK_KEYS } from "./core.jsx";
 
@@ -150,13 +150,28 @@ function EditSection({ icon, title, guard, children }) {
     </section>);
 }
 export function BizEdit({ biz, onSave, onBack }) {
-  const [b, setB] = React.useState(biz);
-  const set = (patch) => setB({ ...b, ...patch });
-  const dirty = JSON.stringify(b) !== JSON.stringify(biz);
-  const bt = BIZ_TYPES.find((t) => t.id === b.type);
+  // Normalise le business sur DEFAULT_BIZ : un business créé sur une ancienne version du Studio
+  // (champs manquants : riskMax, contacts, billingMode…) récupère ainsi tous les réglages, et
+  // l'enregistrement le met à niveau vers le schéma courant. `initial` sert de référence « dirty ».
+  const [b, setB] = React.useState(() => ({ ...DEFAULT_BIZ, ...biz }));
+  const [initial] = React.useState(() => ({ ...DEFAULT_BIZ, ...biz }));
+  const [cq, setCq] = React.useState(""); // champ de recherche d'un pays à ajouter
+  const set = (patch) => setB((prev) => ({ ...prev, ...patch }));
+  const dirty = JSON.stringify(b) !== JSON.stringify(initial);
+  const bt = BIZ_TYPES.find((t) => t.id === b.type) || BIZ_TYPES[0];
   const st = bizStatus(b);
-  const pkg = pkgOf(b.pkg);
+  const annual = b.billingMode !== "payg";
+  const SWATCHES = ["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"];
+  const CONTACTS = [
+    { k: "security", lab: "Cybersécurité", icon: "shieldAlert" },
+    { k: "dpo", lab: "DPO / données personnelles", icon: "lock" },
+    { k: "contract", lab: "Contrat / facturation", icon: "fileCheck" },
+  ];
   function toggleDoc(id) { const has = b.docTypes.includes(id); if (has && b.docTypes.length > 1) set({ docTypes: b.docTypes.filter((d) => d !== id) }); else if (!has) set({ docTypes: [...b.docTypes, id] }); }
+  function toggleDriver(id) { const has = b.drivers.includes(id); if (has) set({ drivers: b.drivers.filter((d) => d !== id) }); else if (b.drivers.length < 3) set({ drivers: [...b.drivers, id] }); }
+  function addCountry(c) { if (!b.countries.includes(c)) set({ countries: [...b.countries, c] }); setCq(""); }
+  function setContact(p) { set({ contacts: { ...b.contacts, ...p } }); }
+  const countryMatches = cq ? BIZ_COUNTRIES.filter((c) => c.toLowerCase().includes(cq.toLowerCase()) && !b.countries.includes(c)).slice(0, 6) : [];
   return (
     <React.Fragment>
       <div className="dash-topbar edit-topbar">
@@ -172,6 +187,30 @@ export function BizEdit({ biz, onSave, onBack }) {
         <button className="sid-btn primary" disabled={!dirty} onClick={() => onSave(b)}>Enregistrer</button>
       </div>
       <div className="dash-body edit-body">
+        <EditSection icon="building" title="Type & statut">
+          <div className="opts" style={{ maxWidth: 680 }}>
+            {BIZ_TYPES.map((t) => { const sel = b.type === t.id; return (
+              <button key={t.id} className={"opt" + (sel ? " sel" : "")} onClick={() => set({ type: t.id })}>
+                <span className={"ico-tile" + (sel ? "" : " dim")}><Ico name={t.icon} size={18} /></span>
+                <div className="obody"><div className="otop"><span className="ot">{t.t}</span><span className="biz-cycle-chip">{t.cycle}</span>{t.soon && <span className="chip sm" style={{ fontSize: 10 }}>tooling V2</span>}</div></div>
+                <span className="mark sq"><Ico name="check" size={12} sw={3} /></span>
+              </button>); })}
+          </div>
+          <div className="tgl-row" style={{ marginTop: 16 }}>
+            <div className="tinfo"><div className="tt">Pilote</div><div className="td">Statut transitoire ; se transforme ensuite en business définitif sans perte de configuration.</div></div>
+            <button className={"sw" + (b.isPilot ? " on" : "")} onClick={() => set({ isPilot: !b.isPilot })} aria-label="Pilote" />
+          </div>
+          {b.isPilot &&
+            <div className="brand-row" style={{ marginTop: 12 }}>
+              <div className="field" style={{ flex: 1 }}><span className="lab">Fin de pilote (indicative)</span><input className="inp" type="date" value={b.pilotEnd} onChange={(e) => set({ pilotEnd: e.target.value })} /></div>
+              <div className="field" style={{ flex: 1 }}><span className="lab">Mise en production estimée</span><input className="inp" type="date" value={b.prodStart} onChange={(e) => set({ prodStart: e.target.value })} /></div>
+            </div>}
+          <div className="tgl-row" style={{ marginTop: 14 }}>
+            <div className="tinfo"><div className="tt">Vérification par opérateur</div><div className="td">Autorise une revue humaine. Le détail (systématique / sur seuil) se règle par workflow.</div></div>
+            <button className={"sw" + (b.operatorEnabled ? " on" : "")} onClick={() => set({ operatorEnabled: !b.operatorEnabled })} aria-label="Opérateur" />
+          </div>
+        </EditSection>
+
         <EditSection icon="building" title="Identité & branding">
           <div className="biz-split edit-split">
             <div className="biz-form">
@@ -179,22 +218,39 @@ export function BizEdit({ biz, onSave, onBack }) {
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Titre principal end-user</span><input className="inp" value={b.euTitle} onChange={(e) => set({ euTitle: e.target.value })} /></div>
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Titre secondaire</span><input className="inp" value={b.euSubtitle} onChange={(e) => set({ euSubtitle: e.target.value })} /></div>
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Libellé du bouton</span><input className="inp" value={b.euCta} onChange={(e) => set({ euCta: e.target.value })} /></div>
-              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur primaire</span><div className="swatches">{["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"].map((c) => <button key={c} className={"swatch" + (b.color === c ? " on" : "")} style={{ background: c }} onClick={() => set({ color: c })}>{b.color === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
-              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur secondaire</span><div className="swatches">{["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"].map((c) => <button key={c} className={"swatch" + (b.colorSecondary === c ? " on" : "")} style={{ background: c }} onClick={() => set({ colorSecondary: c })}>{b.colorSecondary === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
+              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur primaire</span><div className="swatches">{SWATCHES.map((c) => <button key={c} className={"swatch" + (b.color === c ? " on" : "")} style={{ background: c }} onClick={() => set({ color: c })}>{b.color === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
+              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur secondaire</span><div className="swatches">{SWATCHES.map((c) => <button key={c} className={"swatch" + (b.colorSecondary === c ? " on" : "")} style={{ background: c }} onClick={() => set({ colorSecondary: c })}>{b.colorSecondary === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
+              <div className="field" style={{ marginTop: 12 }}><span className="lab">Logo</span><button className="logo-drop" onClick={() => set({ logo: b.logo ? null : "ds/logo-shareid.svg" })}>{b.logo ? <img src={b.logo} alt="" /> : <React.Fragment><Ico name="plus" size={16} sw={2} /><span>Importer un logo</span></React.Fragment>}</button></div>
+              <div className="tgl-row" style={{ marginTop: 14 }}><div className="tinfo"><div className="tt">Co-branding dans le SDK</div><div className="td">Afficher votre marque dans le parcours SDK à la place de « ShareID ».</div></div><button className={"sw" + (b.coBrandSdk ? " on" : "")} onClick={() => set({ coBrandSdk: !b.coBrandSdk })} aria-label="Co-branding SDK" /></div>
             </div>
             <div className="biz-preview-col"><EndUserPreview biz={b} scale={0.82} /></div>
           </div>
         </EditSection>
 
-        <EditSection icon="fileCheck" title="Niveau de risque maximum" guard="plafond ≥ niveau des workflows live">
-          <div className="opts g2-doc" style={{ maxWidth: 560 }}>
+        <EditSection icon="fileCheck" title="Objectif & risque maximum" guard="plafond ≥ niveau des workflows live">
+          <span className="lab">Pourquoi vérifient-ils ? ({b.drivers.length}/3)</span>
+          <div className="opts g3" style={{ marginTop: 8, maxWidth: 680 }}>
+            {BIZ_DRIVERS.map((d) => { const sel = b.drivers.includes(d.id); return (
+              <button key={d.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => toggleDriver(d.id)}>
+                <div className="otop" style={{ width: "100%" }}><span className={"ico-tile" + (sel ? "" : " dim")}><Ico name={d.icon} size={18} /></span><span className="mark sq" style={{ marginLeft: "auto" }}><Ico name="check" size={12} sw={3} /></span></div>
+                <div className="obody"><div className="ot">{d.t}</div></div>
+              </button>); })}
+          </div>
+          <span className="lab" style={{ display: "block", marginTop: 16 }}>Niveau de risque maximum</span>
+          <div className="opts g2-doc" style={{ marginTop: 8, maxWidth: 560 }}>
             {RISK_KEYS.map((k) => <button key={k} className={"opt col" + (b.riskMax === k ? " sel" : "")} onClick={() => set({ riskMax: k })} style={{ paddingTop: 14 }}>{b.riskMax === k && <span className="mark" style={{ position: "absolute", top: 12, right: 12 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}<div className="ot">{LEVELS[k].name}</div></button>)}
           </div>
         </EditSection>
 
         <EditSection icon="globe" title="Périmètre" guard="≥ scope des workflows live">
           <span className="lab">Pays ({b.countries.length})</span>
-          <div className="chips-wrap" style={{ marginTop: 8 }}>{b.countries.map((c) => <span key={c} className="chip"><span className="br-flag">{flagOf(c)}</span>{c}<span className="x" onClick={() => set({ countries: b.countries.filter((x) => x !== c) })}>×</span></span>)}</div>
+          <div className="input-wrap" style={{ maxWidth: 320, marginTop: 8 }}>
+            <span className="ico"><Ico name="search" size={15} /></span>
+            <input className="inp with-icon" value={cq} placeholder="Ajouter un pays…" onChange={(e) => setCq(e.target.value)} />
+            {countryMatches.length > 0 &&
+              <div className="combo-pop">{countryMatches.map((c) => <button key={c} className="combo-opt" onClick={() => addCountry(c)}><span className="br-flag">{flagOf(c)}</span>{c}<Ico name="plus" size={13} sw={2} style={{ marginLeft: "auto", color: "var(--muted-soft)" }} /></button>)}</div>}
+          </div>
+          <div className="chips-wrap" style={{ marginTop: 10 }}>{b.countries.map((c) => <span key={c} className="chip"><span className="br-flag">{flagOf(c)}</span>{c}{b.countries.length > 1 && <span className="x" onClick={() => set({ countries: b.countries.filter((x) => x !== c) })}>×</span>}</span>)}</div>
           <span className="lab" style={{ display: "block", marginTop: 16 }}>Documents</span>
           <div className="opts g2-doc" style={{ marginTop: 8 }}>{DOC_TYPES.map((d) => { const sel = b.docTypes.includes(d.id); return <button key={d.id} className={"doc-pick" + (sel ? " sel" : "")} onClick={() => toggleDoc(d.id)}><span className="doc-art" style={{ color: sel ? "var(--color-main)" : "var(--muted-soft)" }}><DocArt art={d.art} w={54} /></span><span className="doc-pick-nm">{d.short}</span><span className="mark sq"><Ico name="check" size={12} sw={3} /></span></button>; })}</div>
         </EditSection>
@@ -207,15 +263,46 @@ export function BizEdit({ biz, onSave, onBack }) {
           </div>
         </EditSection>
 
-        <EditSection icon="users" title="Utilisateurs" guard="≥ 1 BA owner actif">
-          <div className="user-card owner"><span className="user-ava"><Ico name="userCheck" size={17} /></span><div className="user-fields"><input className="inp sm" value={b.owner.name} onChange={(e) => set({ owner: { ...b.owner, name: e.target.value } })} /><input className="inp sm" value={b.owner.email} onChange={(e) => set({ owner: { ...b.owner, email: e.target.value } })} /></div><span className="chip brand sm" style={{ alignSelf: "center" }}>Owner</span></div>
-          {b.agents.map((a, i) => <div className="user-card" key={i} style={{ marginTop: 8 }}><span className="user-ava dim"><Ico name="users" size={16} /></span><div className="user-fields"><input className="inp sm" value={a.name} onChange={(e) => set({ agents: b.agents.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} /><input className="inp sm" value={a.email} onChange={(e) => set({ agents: b.agents.map((x, j) => j === i ? { ...x, email: e.target.value } : x) })} /></div><button className="user-rm" onClick={() => set({ agents: b.agents.filter((_, j) => j !== i) })}><Ico name="x" size={15} sw={2} /></button></div>)}
+        <EditSection icon="users" title="Utilisateurs & contacts" guard="≥ 1 BA owner actif">
+          <div className="user-card owner"><span className="user-ava"><Ico name="userCheck" size={17} /></span><div className="user-fields"><input className="inp sm" value={b.owner.name} placeholder="Nom complet" onChange={(e) => set({ owner: { ...b.owner, name: e.target.value } })} /><input className="inp sm" value={b.owner.email} placeholder="email@entreprise.com" onChange={(e) => set({ owner: { ...b.owner, email: e.target.value } })} /></div><span className="chip brand sm" style={{ alignSelf: "center" }}>Owner</span></div>
+          {b.agents.map((a, i) => <div className="user-card" key={i} style={{ marginTop: 8 }}><span className="user-ava dim"><Ico name="users" size={16} /></span><div className="user-fields"><input className="inp sm" value={a.name} placeholder="Nom complet" onChange={(e) => set({ agents: b.agents.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} /><input className="inp sm" value={a.email} placeholder="email@entreprise.com" onChange={(e) => set({ agents: b.agents.map((x, j) => j === i ? { ...x, email: e.target.value } : x) })} /></div><button className="user-rm" onClick={() => set({ agents: b.agents.filter((_, j) => j !== i) })}><Ico name="x" size={15} sw={2} /></button></div>)}
           <button className="add-row" onClick={() => set({ agents: [...b.agents, { name: "", email: "" }] })}><Ico name="plus" size={15} sw={2.1} />Ajouter un agent</button>
+          <div className="step-sep" style={{ margin: "18px 0" }} />
+          <span className="lab" style={{ display: "block" }}>Contacts & escalade</span>
+          <div style={{ marginTop: 10 }}>
+            {CONTACTS.map((c) => <div className="contact-row" key={c.k}><span className="contact-ico"><Ico name={c.icon} size={15} /></span><span className="contact-lab">{c.lab}</span><input className="inp sm" value={b.contacts[c.k]} placeholder="email@entreprise.com" onChange={(e) => setContact({ [c.k]: e.target.value })} /></div>)}
+            <div className="contact-row"><span className="contact-ico"><Ico name="arrow" size={15} /></span><span className="contact-lab">Contact d'escalade</span><input className="inp sm" value={b.contacts.escalation} placeholder="email@entreprise.com" onChange={(e) => setContact({ escalation: e.target.value })} /></div>
+          </div>
+          <div className="tgl-row" style={{ marginTop: 14 }}><div className="tinfo"><div className="tt">Mails automatiques</div><div className="td">Notifications politique de confidentialité, PRA/BCP et communications réglementaires.</div></div><button className={"sw" + (b.autoMails ? " on" : "")} onClick={() => set({ autoMails: !b.autoMails })} aria-label="Mails automatiques" /></div>
         </EditSection>
 
         <EditSection icon="wallet" title="Facturation" guard="pas de rétrogradation en cours d'année">
-          <div className="pkg-grid">{TOKEN_PKGS.map((p) => <button key={p.id} className={"pkg-card" + (b.pkg === p.id ? " sel" : "")} onClick={() => set({ pkg: p.id })}><span className="pkg-t">{p.t}</span><span className="pkg-tok">{fmt(p.tokens)}<small> tokens/an</small></span><span className="pkg-env">{eur(p.envelope)}<small> / an</small></span>{b.pkg === p.id && <span className="pkg-check"><Ico name="check" size={12} sw={3} /></span>}</button>)}</div>
-          <div className="tgl-row" style={{ marginTop: 14 }}><div className="tinfo"><div className="tt">Alerte à 80 %</div><div className="td">Email Business Admin + Sales à 80 % de l'enveloppe.</div></div><button className={"sw" + (b.alert80 ? " on" : "")} onClick={() => set({ alert80: !b.alert80 })} /></div>
+          <div className="bill-modes">
+            <button className={"bill-mode" + (annual ? " sel" : "")} onClick={() => set({ billingMode: "annual" })}>
+              <div className="bm-h"><span className="ot">Package de jetons annuel</span><span className="mark sq" style={annual ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}><Ico name="check" size={12} sw={3} style={{ opacity: annual ? 1 : 0 }} /></span></div>
+              <div className="od">Licence + enveloppe annuelle à tarif dégressif.</div>
+            </button>
+            <button className={"bill-mode" + (!annual ? " sel" : "")} onClick={() => set({ billingMode: "payg" })}>
+              <div className="bm-h"><span className="ot">Pay-as-you-go</span><span className="mark sq" style={!annual ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}><Ico name="check" size={12} sw={3} style={{ opacity: !annual ? 1 : 0 }} /></span></div>
+              <div className="od">Petit droit d'entrée + paiement à l'usage. Idéal petites structures.</div>
+            </button>
+          </div>
+          {annual ? (
+            <React.Fragment>
+              <div className="pkg-grid" style={{ marginTop: 14 }}>{TOKEN_PKGS.map((p) => <button key={p.id} className={"pkg-card" + (b.pkg === p.id ? " sel" : "")} onClick={() => set({ pkg: p.id })}><span className="pkg-t">{p.t}</span><span className="pkg-tok">{fmt(p.tokens)}<small> tokens/an</small></span><span className="pkg-env">{eur(p.envelope)}<small> / an</small></span>{b.pkg === p.id && <span className="pkg-check"><Ico name="check" size={12} sw={3} /></span>}</button>)}</div>
+              <div className="tgl-row" style={{ marginTop: 14 }}><div className="tinfo"><div className="tt">Alerte à 80 %</div><div className="td">Email Business Admin + Sales à 80 % de l'enveloppe.</div></div><button className={"sw" + (b.alert80 ? " on" : "")} onClick={() => set({ alert80: !b.alert80 })} aria-label="Alerte 80%" /></div>
+            </React.Fragment>
+          ) : (
+            <div style={{ marginTop: 14 }}>
+              <div className="payg-card">
+                <div className="payg-line"><span>Droit d'entrée</span><b>petit forfait fixe</b></div>
+                <div className="payg-line"><span>Accès dashboard</span><b>réduit</b></div>
+                <div className="payg-line"><span>Jetons inclus</span><b>0</b></div>
+                <div className="payg-line"><span>Facturation</span><b>à l'usage, par requête</b></div>
+              </div>
+              <div className="tgl-row" style={{ marginTop: 14 }}><div className="tinfo"><div className="tt">Self-onboarding</div><div className="td">Le client final porte lui-même son parcours. Activé par défaut en pay-as-you-go.</div></div><button className={"sw" + ((b.selfOnboarding || !annual) ? " on" : "")} onClick={() => set({ selfOnboarding: !b.selfOnboarding })} aria-label="Self-onboarding" /></div>
+            </div>
+          )}
         </EditSection>
       </div>
     </React.Fragment>);
