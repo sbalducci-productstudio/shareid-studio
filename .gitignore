@@ -7,3 +7,6 @@ dist-ssr
 
 .playwright-mcp
 .design-pull/
+
+application.log
+.claude/

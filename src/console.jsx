@@ -27,16 +27,47 @@ export function Panel({ title, sub, right, children, span }) {
     </div>);
 }
 
+/* §17 — widget de consommation présent pour TOUS les clients : jetons engagés vs consommés
+   (tous produits) + coût par produit. Visible même avec peu de données (empty state propre). */
+function ConsoWidget({ testZero }) {
+  const D = CONSOLE_DATA;
+  const engaged = D.quota.total;
+  const consumed = testZero ? 0 : D.quota.used;
+  const consPct = Math.round(consumed / engaged * 100);
+  const products = testZero ? [] : [
+    { k: "Onboarding", tokens: 6400000, cost: 512000 },
+    { k: "Authentification", tokens: 940000, cost: 75200 },
+    { k: "Extraction de données", tokens: 210000, cost: 12600 },
+  ];
+  return (
+    <div className="panel span conso-widget">
+      <div className="panel-h"><div><div className="panel-t">Consommation de jetons</div><div className="panel-sub">engagés vs consommés · tous produits</div></div></div>
+      <div className="panel-body">
+        <div className="conso-head"><span className="conso-big">{fmt(consumed)}</span><span className="conso-of">/ {fmt(engaged)} jetons engagés</span><span className="conso-pct-chip">{consPct} %</span></div>
+        <div className="conso-track2"><div className="conso-fill2" style={{ width: consPct + "%", background: consPct >= 80 ? "var(--color-error)" : "var(--color-main)" }} /></div>
+        {testZero
+          ? <div className="hint" style={{ marginTop: 14 }}>Aucune consommation en mode test. Le détail par produit s'affichera dès les premières requêtes live.</div>
+          : <div className="conso-products">
+              {products.map((p) => <div className="conso-prod" key={p.k}><span className="cp-k">{p.k}</span><span className="cp-tok">{fmt(p.tokens)} jetons</span><span className="cp-cost">{fmtFull(p.cost)} €</span></div>)}
+            </div>}
+      </div>
+    </div>);
+}
+
 export function ConsoleHome({ onNav }) {
   const [mode, setMode] = React.useState("live");
   const [period, setPeriod] = React.useState("30 j");
+  const [custom, setCustom] = React.useState(false);
   const D = CONSOLE_DATA;
   const testZero = mode === "test";
   return (
     <React.Fragment>
       <div className="dash-topbar">
         <div className="dt-head"><div className="eyebrow">Console</div><h1>Accueil</h1></div>
-        <div className="topbar-controls"><PeriodSeg value={period} onChange={setPeriod} options={["7 j", "30 j"]} /><ModeToggle mode={mode} onChange={setMode} /></div>
+        <div className="topbar-controls">
+          <button className={"sid-btn outline sm-btn" + (custom ? " on" : "")} onClick={() => setCustom((v) => !v)}><Ico name="grid" size={14} sw={1.8} />{custom ? "Vue widgets" : "Personnaliser"}</button>
+          <PeriodSeg value={period} onChange={setPeriod} options={["7 j", "30 j"]} /><ModeToggle mode={mode} onChange={setMode} />
+        </div>
       </div>
       <div className="dash-body console-body">
         {/* alerts */}
@@ -49,17 +80,27 @@ export function ConsoleHome({ onNav }) {
               </div>)}
           </div>}
 
-        {/* KPI hero */}
+        {/* §17 — widget conso de base, pour tous */}
+        <div className="panel-grid"><ConsoWidget testZero={testZero} /></div>
+
+        {/* KPI hero (écran statique : ce que tout le monde veut voir) */}
         <div className="kpi-grid">
           {D.kpis.map((k) =>
             <StatCard key={k.id} label={k.label} value={testZero ? "0" : k.value} unit={k.unit} delta={testZero ? null : k.delta} invert={k.invert} sub={k.sub} spark={k.id === "vol" && !testZero ? k.spark : null} />)}
         </div>
 
+        {/* §17 — écran de widgets personnalisables (le client ajoute les siens) */}
+        {custom &&
+          <div className="panel-grid three" style={{ marginTop: 4 }}>
+            {["Volume par workflow", "Pass rate par pays", "Coût par device"].map((w) =>
+              <button key={w} className="widget-add"><Ico name="plus" size={18} sw={2} /><span>{w}</span><span className="hint">Ajouter ce widget</span></button>)}
+          </div>}
+
         <div className="panel-grid">
           <Panel title="Funnel de vérification" sub="Démarrées → décision → acceptées" span>
             {testZero ? <Empty /> : <Funnel stages={D.funnel} />}
           </Panel>
-          <Panel title="Mix méthode de capture" sub="Différenciateur eIDAS : pass rate NFC">
+          <Panel title="Mix méthode de capture" sub="Différenciateur de risque : pass rate NFC">
             {testZero ? <Empty /> : <Donut data={D.mix} center={{ v: fmt(D.mix.reduce((s, m) => s + m.v, 0)), l: "captures" }} />}
           </Panel>
         </div>
@@ -76,6 +117,25 @@ export function ConsoleHome({ onNav }) {
           </Panel>
           <Panel title="Enveloppe de tokens" sub="consommé vs contracté">
             {testZero ? <Empty /> : <Gauge used={D.quota.used} total={D.quota.total} projection={D.quota.projection} />}
+          </Panel>
+        </div>
+
+        {/* §20 — consommation des prestataires tiers intégrés (QES / data-sure) */}
+        <div className="panel-grid">
+          <Panel title="Prestataires tiers" sub="signature & vérification de données intégrées" span right={<span className="chip sm">facturation séparée</span>}>
+            {testZero ? <Empty /> : (
+              <div className="third-party-rows">
+                {[
+                  { k: "Signature qualifiée (QES)", prov: "Partenaire estonien", v: 3120, unit: "signatures" },
+                  { k: "Signature avancée (AES)", prov: "Partenaire estonien", v: 8640, unit: "signatures" },
+                  { k: "Data-sure", prov: "Vérification de données", v: 12400, unit: "appels" },
+                ].map((t) => (
+                  <div className="tp-row" key={t.k}>
+                    <span className="tp-ico"><Ico name="key" size={15} /></span>
+                    <div className="tp-info"><div className="tp-k">{t.k}</div><div className="tp-prov">{t.prov}</div></div>
+                    <span className="tp-v">{fmtFull(t.v)} <small>{t.unit}</small></span>
+                  </div>))}
+              </div>)}
           </Panel>
         </div>
       </div>

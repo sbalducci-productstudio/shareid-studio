@@ -2,7 +2,8 @@
 import React from "react";
 import {
   Ico, REAUTH, DOC_TYPES, ZONES, COUNTRY_SUGGEST, BUSINESS_MAX_COUNTRIES,
-  DOC_METHODS, FACE_PRESETS, LEVELS, achievedLevel, coherence, effTarget,
+  CAPTURE_METHODS, captureLabel, SIGNATURE_LEVELS, FACE_PRESETS, LEVELS, LEVEL_KEYS,
+  BUSINESS_EIDAS, BUSINESS_RISK_MAX, exceedsBusinessMax, achievedLevel, coherence, effTarget,
   EidasTag, DocArt,
 } from "./core.jsx";
 
@@ -50,6 +51,28 @@ export function StepReauth({ cfg, set, stepNum, stepTotal }) {
         <span className="ico"><Ico name="clock" size={15} sw={1.9} /></span>
         <div>L'ordre définit la bascule : si la méthode 1 échoue, le parcours tente la méthode 2. L'utilisateur final ne choisit pas.</div>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Step (cond) — Signature : capture email / téléphone (§15) ---------------- */
+export function StepSignature({ cfg, set, stepNum, stepTotal }) {
+  const sig = SIGNATURE_LEVELS.find((s) => s.id === cfg.signature) || {};
+  return (
+    <div className="body-inner step-anim">
+      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal} · conditionnelle</div><h2>Signature</h2><p className="sub">La signature {sig.t && sig.t.toLowerCase()} nécessite un point de contact pour communiquer avec le prestataire de certificat.</p></div>
+      <section className="cfg-sec" style={{ maxWidth: 560 }}>
+        <div className="cfg-sec-h"><span className="cfg-sec-t">Point de contact</span></div>
+        <div className="seg" style={{ marginBottom: 16 }}>
+          <button className={cfg.sigContact === "email" ? "on" : ""} onClick={() => set({ sigContact: "email" })}>Email</button>
+          <button className={cfg.sigContact === "phone" ? "on" : ""} onClick={() => set({ sigContact: "phone" })}>Téléphone</button>
+        </div>
+        <div className="field">
+          <span className="lab">{cfg.sigContact === "email" ? "Email demandé à l'utilisateur" : "Numéro de téléphone demandé à l'utilisateur"}</span>
+          <input className="inp" disabled placeholder={cfg.sigContact === "email" ? "saisi par l'utilisateur dans le SDK" : "saisi par l'utilisateur dans le SDK"} />
+        </div>
+        <div className="note" style={{ marginTop: 16 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>On capture <b>email OU téléphone</b>, jamais les deux. Requis pour la signature {cfg.signature === "qes" ? "qualifiée (QES)" : "avancée (AES)"}. Optionnel par défaut — activable sans casser le reste du parcours.</div></div>
+      </section>
     </div>
   );
 }
@@ -154,58 +177,124 @@ export function StepScope({ cfg, set, stepNum, stepTotal }) {
 }
 
 /* ---------------- Step 7 — Options avancées ---------------- */
+function AdvToggle({ tt, td, on, set }) {
+  return (
+    <div className="tgl-row">
+      <div className="tinfo"><div className="tt">{tt}</div><div className="td">{td}</div></div>
+      <button className={"sw" + (on ? " on" : "")} onClick={() => set(!on)} aria-label={tt} />
+    </div>);
+}
 export function StepAdvanced({ cfg, set, stepNum, stepTotal }) {
-  const showRetry = cfg.docMethod === "nfc_fallback";
+  const [openMatch, setOpenMatch] = React.useState(false);
+  const ach = achievedLevel(cfg);
+  const coh = coherence(ach, effTarget(cfg));
+  const heavyUx = cfg.operatorReview && (cfg.operatorMode || "always") === "always" && (cfg.faceLevel === "video_pad_iad" || cfg.docPrimary === "video");
+  const isPhoto = cfg.docPrimary === "photo";
   return (
     <div className="body-inner step-anim">
-      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Options avancées</h2><p className="sub">Deux réglages indépendants : le contrôle humain et le comportement de capture.</p></div>
+      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Options avancées</h2><p className="sub">Réglages fins. Tout est optionnel et replié par défaut — n'ouvrez que ce dont vous avez besoin.</p></div>
 
+      {/* §13 — alertes de risque / UX, non bloquantes */}
+      {coh && coh.cls === "down" && (
+        <div className="note warn" style={{ maxWidth: 640, marginBottom: 12 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Attention : votre configuration <b>baisse votre niveau de risque</b> sous la cible ({LEVELS[effTarget(cfg)].name}). Non bloquant.</div></div>
+      )}
+      {heavyUx && (
+        <div className="note warn" style={{ maxWidth: 640, marginBottom: 12 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Attention : revue opérateur systématique + capture vidéo → <b>UX plus lourde</b> et délai accru. Non bloquant.</div></div>
+      )}
+
+      {/* §13 — revue opérateur : on/off réglé au business, ici on affine le niveau */}
       <section className="adv-section" style={{ maxWidth: 640 }}>
-        <div className="adv-head"><span className="adv-n">1</span><div className="adv-info"><div className="adv-t">Revue opérateur</div><div className="adv-d">Qui valide la décision finale.</div></div></div>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-          <div className="seg"><button className={cfg.operatorReview ? "on" : ""} onClick={() => set({ operatorReview: true })}>Avec opérateur</button><button className={!cfg.operatorReview ? "on" : ""} onClick={() => set({ operatorReview: false })}>Sans opérateur</button></div>
-        </div>
+        <div className="adv-head"><span className="adv-n">1</span><div className="adv-info"><div className="adv-t">Niveau de revue opérateur</div><div className="adv-d">L'activation avec / sans opérateur est réglée au niveau du business. Ici, vous affinez quand il intervient.</div></div></div>
         {cfg.operatorReview ? (
           <React.Fragment>
-            <div style={{ marginBottom: 12 }}>
-              <span className="lab" style={{ display: "block", marginBottom: 9 }}>Quand l'opérateur intervient</span>
-              <div className="opts g3">
-                {[
-                  { id: "always", t: "Systématiquement", d: "Chaque dossier passe en revue humaine." },
-                  { id: "success", t: "En cas de succès", d: "Revue quand l'IA accepte le dossier." },
-                  { id: "reject", t: "En cas de rejet", d: "Revue quand l'IA rejette le dossier." },
-                ].map((o) => {
-                  const sel = (cfg.operatorMode || "always") === o.id;
-                  return (
-                    <button key={o.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => set({ operatorMode: o.id })} style={{ paddingTop: 16, paddingRight: 36 }}>
-                      {sel && <span className="mark" style={{ position: "absolute", top: 14, right: 14 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}
-                      <div className="obody" style={{ width: "100%" }}><div className="otop"><span className="ot">{o.t}</span></div><div className="od">{o.d}</div></div>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="opts g3" style={{ marginBottom: 12 }}>
+              {[
+                { id: "always", t: "Systématiquement", d: "Chaque dossier passe en revue humaine." },
+                { id: "success", t: "En cas de succès", d: "Revue quand l'IA accepte le dossier." },
+                { id: "reject", t: "En cas de rejet", d: "Revue quand l'IA rejette le dossier." },
+              ].map((o) => {
+                const sel = (cfg.operatorMode || "always") === o.id;
+                return (
+                  <button key={o.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => set({ operatorMode: o.id })} style={{ paddingTop: 16, paddingRight: 36 }}>
+                    {sel && <span className="mark" style={{ position: "absolute", top: 14, right: 14 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}
+                    <div className="obody" style={{ width: "100%" }}><div className="otop"><span className="ot">{o.t}</span></div><div className="od">{o.d}</div></div>
+                  </button>);
+              })}
             </div>
-            <div className="note"><span className="ico"><Ico name="userCheck" size={15} sw={1.9} /></span><div><b>Avec opérateur</b> : un humain vérifie le verdict de l'IA {(cfg.operatorMode || "always") === "always" ? "sur chaque dossier" : (cfg.operatorMode === "success" ? "lorsque l'IA accepte" : "lorsque l'IA rejette")} avant la décision finale. Ajoute de la confiance et un léger délai.</div></div>
           </React.Fragment>
         ) : (
-          <div className="note"><span className="ico"><Ico name="userCheck" size={15} sw={1.9} /></span><div><b>Sans opérateur</b> : la décision est 100&nbsp;% automatique et instantanée.</div></div>
+          <div className="note"><span className="ico"><Ico name="userCheck" size={15} sw={1.9} /></span><div>Opérateur <b>désactivé</b> au niveau du business : décision 100&nbsp;% automatique.</div></div>
         )}
       </section>
 
+      {/* §13bis — matching & capture d'infos, repliés par défaut */}
       <section className="adv-section" style={{ maxWidth: 640 }}>
-        <div className="adv-head"><span className="adv-n">2</span><div className="adv-info"><div className="adv-t">Tentatives NFC avant bascule vidéo</div><div className="adv-d">Combien d'essais NFC avant de passer en capture vidéo.</div></div>{!showRetry && <span className="statebadge na" style={{ alignSelf: "center" }}>NFC fallback requis</span>}</div>
-        {showRetry ? (
-          <div>
-            <p className="hint" style={{ marginBottom: 16 }}>Au-delà de ce nombre d'échecs NFC, le parcours bascule automatiquement en capture vidéo.</p>
-            <div className="slider" style={{ maxWidth: 360 }}>
-              <input type="range" min="2" max="5" step="1" value={cfg.nfcRetry} onChange={(e) => set({ nfcRetry: +e.target.value })} className="range-native" style={{ background: `linear-gradient(to right, var(--color-main) ${((cfg.nfcRetry - 2) / 3) * 100}%, var(--line) ${((cfg.nfcRetry - 2) / 3) * 100}%)` }} />
-              <div className="ticks">{[2, 3, 4, 5].map((n) => <button key={n} className={cfg.nfcRetry === n ? "cur" : ""} onClick={() => set({ nfcRetry: n })}>{n}</button>)}</div>
-            </div>
-            <p className="hint" style={{ marginTop: 14 }}>{cfg.nfcRetry} échec{cfg.nfcRetry > 1 ? "s" : ""} NFC, puis bascule vidéo.</p>
+        <button className="adv-collapse" onClick={() => setOpenMatch((v) => !v)}>
+          <span className="adv-n">2</span>
+          <div className="adv-info"><div className="adv-t">Matching & capture d'infos</div><div className="adv-d">Comparaisons et vérifications optionnelles fournies par le client.</div></div>
+          <Ico name={openMatch ? "chevUp" : "chevDown"} size={16} sw={2} />
+        </button>
+        {openMatch && (
+          <div style={{ marginTop: 12 }}>
+            <AdvToggle tt="Matching identité" td="Le client fournit nom + prénom + date de naissance → ShareID indique si ça correspond au document. Optionnel." on={cfg.matchIdentity} set={(v) => set({ matchIdentity: v })} />
+            <AdvToggle tt="Face match (photo fournie)" td="Comparer une photo fournie par le client avec celle du document ou de l'onboarding." on={cfg.matchPhoto} set={(v) => set({ matchPhoto: v })} />
+            {isPhoto ? (
+              <React.Fragment>
+                <AdvToggle tt="Document scope check" td="Vérifie le pays + le type de document (CNI / permis / passeport) avant de lancer un run complet — évite de payer un run sur un non-document. Méthode photo uniquement." on={cfg.scopeCheck} set={(v) => set({ scopeCheck: v })} />
+                {cfg.scopeCheck && <AdvToggle tt="Sauter l'étape scope" td="Pour un client qui accepte tous les types de documents." on={cfg.scopeCheckSkip} set={(v) => set({ scopeCheckSkip: v })} />}
+              </React.Fragment>
+            ) : (
+              <div className="note" style={{ marginTop: 10 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Le <b>document scope check</b> n'est disponible qu'avec la méthode <b>photo</b>.</div></div>
+            )}
           </div>
-        ) : (
-          <div className="note"><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Ce réglage n'apparaît que pour la méthode « NFC avec fallback vidéo » (étape Document).</div></div>
         )}
+      </section>
+    </div>
+  );
+}
+
+/* ---------------- Step — Résultat (§14) ---------------- */
+export function StepResult({ cfg, set, stepNum, stepTotal }) {
+  const heavy = cfg.resultMode === "heavy";
+  const usesNfc = cfg.docPrimary === "nfc" || cfg.docSecondary === "nfc";
+  // Rétention par cas d'usage : hérite du business (30 j), augmentable uniquement.
+  const RET_OPTS = [{ d: 0, l: "Hérité du business · 30 j" }, { d: 60, l: "60 jours" }, { d: 90, l: "90 jours" }, { d: 180, l: "180 jours" }];
+  return (
+    <div className="body-inner step-anim" style={{ maxWidth: 680 }}>
+      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Résultat</h2><p className="sub">Ce que vous récupérez à chaque requête, et ce que vous archivez.</p></div>
+
+      <div className="opts" style={{ marginBottom: 18 }}>
+        <button className={"opt" + (!heavy ? " sel" : "")} onClick={() => set({ resultMode: "light" })}>
+          <span className="mark"><Ico name="check" size={12} sw={3} /><span className="dot" /></span>
+          <div className="obody"><div className="otop"><span className="ot">Light fetch</span><span className="chip brand sm">défaut</span></div><div className="od">Le JSON normal : verdict et données extraites. Léger, récupéré par défaut.</div></div>
+        </button>
+        <button className={"opt" + (heavy ? " sel" : "")} onClick={() => set({ resultMode: "heavy" })}>
+          <span className="mark"><Ico name="check" size={12} sw={3} /><span className="dot" /></span>
+          <div className="obody"><div className="otop"><span className="ot">Heavy fetch</span><span className="chip sm">dossier de preuve</span></div><div className="od">Dossier de preuve légal conforme PVID 1.0 : timeline complète et exportable (init SDK horodaté, acquisition, photos, réponses IA par élément de sécurité, intervention opérateur + changement de verdict, renvoi). À archiver (banques : 5 à 7 ans).</div></div>
+        </button>
+      </div>
+
+      <section className="cfg-sec">
+        <div className="cfg-sec-h"><span className="cfg-sec-t">Assets inclus</span></div>
+        <AdvToggle tt="Crops du document (recto / verso)" td="Images recadrées du document." on={cfg.includeCrops} set={(v) => set({ includeCrops: v })} />
+        <AdvToggle tt="Crop du visage" td="Photo du visage issue du document ou de la capture." on={cfg.includeFaceCrop} set={(v) => set({ includeFaceCrop: v })} />
+        <AdvToggle tt="Recevoir les assets à chaque requête" td="Photos et vidéos sont lourdes. Désactivez pour alléger l'API — tout reste consultable dans l'historique du dashboard." on={cfg.sendAssets} set={(v) => set({ sendAssets: v })} />
+      </section>
+
+      {usesNfc && (cfg.includeCrops || cfg.includeFaceCrop) && (
+        <div className="note" style={{ marginTop: 4 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Une photo issue du <b>NFC</b> (puce) et une photo issue de l'<b>OCR</b> du document n'ont pas la même légitimité légale. ShareID indique l'origine de chaque photo dans le résultat.</div></div>
+      )}
+
+      <section className="cfg-sec" style={{ marginTop: 18 }}>
+        <div className="cfg-sec-h"><span className="cfg-sec-t">Rétention de ce workflow</span></div>
+        <div className="seg" style={{ flexWrap: "wrap" }}>
+          {RET_OPTS.map((o) => <button key={o.d} className={(cfg.wfRetentionDays || 0) === o.d ? "on" : ""} onClick={() => set({ wfRetentionDays: o.d })}>{o.l}</button>)}
+        </div>
+        <span className="hint" style={{ marginTop: 8, display: "block" }}>Hérite du business par défaut. Augmentable uniquement — jamais en dessous de la rétention business.</span>
+      </section>
+
+      <section className="cfg-sec" style={{ marginTop: 18 }}>
+        <AdvToggle tt="OCR temporel" td="Suivi temporel des champs OCR (configurable)." on={cfg.ocrTemporal} set={(v) => set({ ocrTemporal: v })} />
       </section>
     </div>
   );
@@ -216,17 +305,22 @@ function RecapRow({ ic, l, children }) {
   return <div className="recap-row"><span className="recap-ic"><Ico name={ic} size={15} sw={1.8} /></span><span className="recap-l">{l}</span><span className="recap-v">{children}</span></div>;
 }
 export function StepPreview({ cfg, stepNum, stepTotal }) {
+  const isExtraction = cfg.verifType === "extraction";
   const ach = achievedLevel(cfg);
-  const dm = DOC_METHODS.find((m) => m.id === cfg.docMethod) || {};
+  const dm = CAPTURE_METHODS.find((m) => m.id === cfg.docPrimary) || {};
+  const dm2 = CAPTURE_METHODS.find((m) => m.id === cfg.docSecondary);
   const fp = FACE_PRESETS.find((f) => f.id === cfg.faceLevel) || {};
   const coh = coherence(ach, effTarget(cfg));
+  const hasSig = cfg.signature && cfg.signature !== "none";
   const reauthNames = cfg.reauthOrder.filter((id) => cfg.reauthOn[id]).map((id) => REAUTH.find((r) => r.id === id).t);
+  // §24 — chaque frame reflète réellement la config : pas de visage en extraction, etc.
   const frames = [
     { t: "Ouverture", icon: "smartphone", cap: "SDK ShareID" },
-    { t: "Document", icon: "doc", cap: dm.t || "Document" },
-    { t: "Visage", icon: "smile", cap: fp.t || "Visage" },
-    ...(cfg.authentication ? [{ t: "Réauth", icon: "smile", cap: reauthNames[0] || "Réauth" }] : []),
-    { t: "Résultat", icon: "check", cap: "eIDAS " + (ach ? LEVELS[ach].name : "—"), payoff: true },
+    { t: "Document", icon: dm.icon || "doc", cap: dm.t || "Document" },
+    ...(!isExtraction ? [{ t: "Visage", icon: "smile", cap: fp.t || "Visage" }] : []),
+    ...(cfg.verifType === "authentication" ? [{ t: "Réauth", icon: "refresh", cap: reauthNames[0] || "Réauth" }] : []),
+    ...(hasSig ? [{ t: "Signature", icon: "key", cap: cfg.sigContact === "email" ? "Email" : "Téléphone" }] : []),
+    { t: "Résultat", icon: "check", cap: isExtraction ? "Données extraites" : "Risque " + (ach ? LEVELS[ach].name : "—"), payoff: true },
   ];
   const { useState, useEffect, useRef } = React;
   const [lit, setLit] = useState(-1);
@@ -236,10 +330,14 @@ export function StepPreview({ cfg, stepNum, stepTotal }) {
     timer.current = setInterval(() => { i++; if (i >= frames.length) { clearInterval(timer.current); setTimeout(() => setLit(-1), 500); } else setLit(i); }, 520);
   }
   useEffect(() => () => clearInterval(timer.current), []);
-  const docPhrase = { nfc: "scannent leur pièce en NFC", nfc_fallback: "scannent leur pièce en NFC (vidéo si échec)", video: "filment leur pièce", photo: "photographient leur pièce" }[cfg.docMethod] || "présentent leur pièce";
+  // §22 — effet « waouh » : on joue le parcours automatiquement à l'arrivée sur l'aperçu.
+  useEffect(() => { const t = setTimeout(play, 350); return () => clearTimeout(t); }, []); // eslint-disable-line
+  // §24 — verbe de capture aligné sur la méthode réellement choisie (pas de « vidéo » si c'est photo+NFC).
+  const docPhrase = { nfc: "scannent leur pièce en NFC", video: "filment leur pièce", photo: "photographient leur pièce", wallet: "présentent leur wallet" }[cfg.docPrimary] || "présentent leur pièce";
   const scopeVal = cfg.scopeSource === "inherited"
     ? "Hérité du business · UE + Royaume-Uni · 4 documents"
     : (Math.min(BUSINESS_MAX_COUNTRIES, cfg.zones.reduce((s, z) => s + (ZONES.find((Z) => Z.id === z)?.n || 0), 0) + cfg.countries.length)) + " pays · " + cfg.docTypes.length + " documents";
+  const verifName = { onboarding: "Onboarding (IDV)", authentication: "Authentification", extraction: "Extraction de données" }[cfg.verifType];
   return (
     <div className="body-inner step-anim" style={{ maxWidth: 780 }}>
       <div className="wzh" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20 }}>
@@ -261,18 +359,22 @@ export function StepPreview({ cfg, stepNum, stepTotal }) {
 
       <div className="recap">
         <div className="recap-h">Récapitulatif</div>
-        <RecapRow ic="userCheck" l="Vérification">{cfg.authentication ? "Onboarding + Authentification" : "Onboarding (IDV)"}</RecapRow>
-        <RecapRow ic="shieldFace" l="Niveau eIDAS"><EidasTag levelKey={effTarget(cfg)} prefix={cfg.eidasTarget ? "Cible" : "Cible héritée"} /><Ico name="arrow" size={13} sw={2} style={{ margin: "0 2px", color: "var(--muted-soft)" }} /><EidasTag levelKey={ach} prefix="Atteint" />{coh && <span className={"coh " + coh.cls}>{coh.label}</span>}</RecapRow>
-        <RecapRow ic="doc" l="Document">{dm.t}<EidasTag levelKey={dm.level} prefix="" />{cfg.pad && <span className="chip sm">PAD</span>}{cfg.iad && <span className="chip sm">IAD</span>}</RecapRow>
-        <RecapRow ic="faceScan" l="Visage">{fp.t}<EidasTag levelKey={fp.level} prefix="" /></RecapRow>
-        {cfg.authentication && <RecapRow ic="refresh" l="Réauthentification">{reauthNames.map((n, i) => <span key={n} className="chip sm">{i + 1}. {n}</span>)}</RecapRow>}
+        <RecapRow ic="userCheck" l="Vérification">{verifName}</RecapRow>
+        {!isExtraction && <RecapRow ic="shieldFace" l="Niveau de risque"><EidasTag levelKey={effTarget(cfg)} prefix={cfg.eidasTarget ? "Cible" : "Cible héritée"} /><Ico name="arrow" size={13} sw={2} style={{ margin: "0 2px", color: "var(--muted-soft)" }} /><EidasTag levelKey={ach} prefix="Atteint" />{coh && <span className={"coh " + coh.cls}>{coh.label}</span>}</RecapRow>}
+        <RecapRow ic="doc" l="Document">{captureLabel(cfg.docPrimary)}<EidasTag levelKey={dm.level} prefix="" />{cfg.pad && <span className="chip sm">PAD</span>}{cfg.iad && <span className="chip sm">IAD</span>}{dm2 && <span className="chip sm">repli : {dm2.t}</span>}</RecapRow>
+        {!isExtraction && <RecapRow ic="faceScan" l="Visage">{fp.t}<EidasTag levelKey={fp.level} prefix="" /></RecapRow>}
+        {cfg.verifType === "authentication" && <RecapRow ic="refresh" l="Réauthentification">{reauthNames.map((n, i) => <span key={n} className="chip sm">{i + 1}. {n}</span>)}</RecapRow>}
+        {hasSig && <RecapRow ic="key" l="Signature">{cfg.signature === "qes" ? "QES" : "AES"} · {cfg.sigContact === "email" ? "email" : "téléphone"}</RecapRow>}
         <RecapRow ic="globe" l="Périmètre">{scopeVal}</RecapRow>
+        <RecapRow ic="fileCheck" l="Résultat">{cfg.resultMode === "heavy" ? "Heavy fetch · dossier de preuve" : "Light fetch"}</RecapRow>
         <RecapRow ic="userCheck" l="Revue opérateur">{cfg.operatorReview ? "Avec opérateur · " + ({ always: "systématiquement", success: "en cas de succès", reject: "en cas de rejet" }[cfg.operatorMode || "always"]) : "Sans opérateur (100 % auto)"}</RecapRow>
       </div>
 
       <div className="note" style={{ marginTop: 16 }}>
         <span className="ico"><Ico name="eye" size={15} sw={1.9} /></span>
-        <div><b>En clair :</b> vos utilisateurs ouvrent le SDK, {docPhrase}, passent un contrôle {cfg.faceLevel === "photo" ? "photo" : "vidéo"} du visage{cfg.authentication ? ", puis se réauthentifient via " + (reauthNames[0] || "réauth") : ""}. Niveau atteint : <b>{ach ? LEVELS[ach].name : "—"}</b>{ach === effTarget(cfg) ? " — conforme à votre cible." : "."}</div>
+        {isExtraction
+          ? <div><b>En clair :</b> vos utilisateurs ouvrent le SDK et {docPhrase} ; ShareID en extrait les données par OCR. Pas de vérification d'identité ni de niveau de risque.</div>
+          : <div><b>En clair :</b> vos utilisateurs ouvrent le SDK, {docPhrase}, passent un contrôle {cfg.faceLevel === "photo" ? "photo" : "vidéo"} du visage{cfg.verifType === "authentication" ? ", puis se réauthentifient via " + (reauthNames[0] || "réauth") : ""}{hasSig ? ", et signent (" + (cfg.sigContact === "email" ? "email" : "téléphone") + ")" : ""}. Niveau atteint : <b>{ach ? LEVELS[ach].name : "—"}</b>{ach === effTarget(cfg) ? " — conforme à votre cible." : "."}</div>}
       </div>
       <div style={{ marginTop: 16 }}><button className="sid-btn outline"><Ico name="share" size={14} />Partager l'aperçu</button></div>
     </div>
@@ -293,14 +395,22 @@ export function StepIntegration({ cfg, set, requestLive, stepNum, stepTotal }) {
     { k: "Webhook · HMAC", v: "whsec_a44…·secret" },
   ];
   const snippets = {
-    ios: `import ShareID\n\nShareID.start(\n  workflow: "wf_1234",\n  apiKey: "${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}"\n) { result in\n  // result.eidasLevel\n}`,
-    android: `ShareID.start(\n  workflowId = "wf_1234",\n  apiKey = "${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}"\n) { result ->\n  // result.eidasLevel\n}`,
+    ios: `import ShareID\n\nShareID.start(\n  workflow: "wf_1234",\n  apiKey: "${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}"\n) { result in\n  // result.riskLevel\n}`,
+    android: `ShareID.start(\n  workflowId = "wf_1234",\n  apiKey = "${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}"\n) { result ->\n  // result.riskLevel\n}`,
     web: `import { ShareID } from "@shareid/web";\n\nShareID.start({\n  workflow: "wf_1234",\n  apiKey: "${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}"\n});`,
     flutter: `await ShareID.start(\n  workflow: 'wf_1234',\n  apiKey: '${cfg.mode === "live" ? "sk_live_…" : "sk_test_…"}',\n);`,
   };
   return (
     <div className="body-inner step-anim" style={{ maxWidth: 720 }}>
       <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Intégration</h2><p className="sub">Récupérez votre configuration, testez, et intégrez ShareID.</p></div>
+
+      {/* §16 — état d'erreur si le paramétrage dépasse le plafond de risque du contrat business. */}
+      {exceedsBusinessMax(cfg) && (
+        <div className="note warn" style={{ maxWidth: 660, marginBottom: 18 }}>
+          <span className="ico"><Ico name="shieldAlert" size={15} sw={1.9} /></span>
+          <div><b>Votre contrat ne permet pas ce paramétrage.</b> Le niveau de risque atteint dépasse le plafond autorisé pour ce business ({LEVELS[BUSINESS_RISK_MAX].name}). Réduisez le niveau du workflow ou faites évoluer le contrat.</div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11, maxWidth: 660 }}>
@@ -340,7 +450,21 @@ export function StepIntegration({ cfg, set, requestLive, stepNum, stepTotal }) {
       </div>
 
       <div style={{ maxWidth: 660, marginTop: 24 }}>
-        <span className="lab" style={{ display: "block", marginBottom: 10 }}>Intégrez le SDK</span>
+        <span className="lab" style={{ display: "block", marginBottom: 10 }}>Intégrer en 4 étapes <span className="hint" style={{ fontWeight: 400 }}>· l'essentiel, pas la doc complète</span></span>
+        <div className="int-steps">
+          {[
+            { t: "Installez le SDK", d: "Ajoutez le package ShareID à votre app (iOS, Android, Web ou Flutter)." },
+            { t: "Initialisez", d: "Passez votre clé SDK et l'ID du workflow." },
+            { t: "Lancez le parcours", d: "Le SDK ouvre le parcours configuré ci-dessus." },
+            { t: "Récupérez le résultat", d: "Fetch à la demande ou callback webhook signé HMAC." },
+          ].map((s, i) => (
+            <div className="int-step" key={i}><span className="int-step-n">{i + 1}</span><div><div className="int-step-t">{s.t}</div><div className="int-step-d">{s.d}</div></div></div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 660, marginTop: 24 }}>
+        <span className="lab" style={{ display: "block", marginBottom: 10 }}>Snippet SDK</span>
         <div className="sdk-tabs">
           {["ios", "android", "web", "flutter"].map((t) => <button key={t} className={"sdk-tab" + (tab === t ? " on" : "")} onClick={() => setTab(t)}>{t === "ios" ? "iOS" : t[0].toUpperCase() + t.slice(1)}</button>)}
           <span className="sdk-tab" style={{ borderStyle: "dashed", color: "var(--muted)" }}>workflow_config.json</span>

@@ -239,6 +239,7 @@ h1,h2,h3,h4{ margin:0; line-height:var(--line-tight); }
 .eidas-tag.high{ background:var(--color-main); color:#fff; }
 .eidas-tag.subst{ background:color-mix(in srgb,var(--color-main) 12%,#fff); color:var(--color-main); }
 .eidas-tag.low{ background:var(--neutral-bg); color:var(--neutral-ink); }
+.eidas-tag.none{ background:transparent; color:var(--muted); box-shadow:inset 0 0 0 1px var(--line); }
 .coh{ display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:999px; font-size:10.5px; font-weight:600; white-space:nowrap; }
 .coh.eq{ background:var(--good-bg); color:var(--good); }
 .coh.up{ background:var(--info-bg); color:var(--color-main); }
@@ -411,6 +412,16 @@ h1,h2,h3,h4{ margin:0; line-height:var(--line-tight); }
 /* advanced — two sections */
 .adv-section{ border:1px solid var(--line); border-radius:15px; padding:18px 20px; margin-bottom:16px; }
 .adv-head{ display:flex; align-items:flex-start; gap:13px; margin-bottom:14px; }
+.adv-collapse{ display:flex; align-items:center; gap:13px; width:100%; background:transparent; border:0; padding:0; cursor:pointer; text-align:left; color:var(--ink); }
+.adv-collapse .adv-info{ flex:1; }
+.adv-collapse svg{ color:var(--muted); }
+/* §16 — étapes d'intégration concises */
+.int-steps{ display:flex; flex-direction:column; gap:2px; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+.int-step{ display:flex; align-items:flex-start; gap:13px; padding:13px 16px; background:#fff; }
+.int-step + .int-step{ border-top:1px solid var(--line); }
+.int-step-n{ width:22px; height:22px; border-radius:50%; background:var(--color-main); color:#fff; font-size:11.5px; font-weight:700; display:grid; place-items:center; flex:none; font-family:var(--font-mono); }
+.int-step-t{ font-size:13.5px; font-weight:600; }
+.int-step-d{ font-size:12.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
 .adv-n{ width:24px; height:24px; border-radius:50%; background:var(--info-bg); color:var(--color-main); font-size:12px; font-weight:600; display:grid; place-items:center; flex:none; font-family:var(--font-mono); }
 .adv-info{ flex:1; }
 .adv-t{ font-size:15px; font-weight:600; }
@@ -488,3 +499,12 @@ h1,h2,h3,h4{ margin:0; line-height:var(--line-tight); }
 :root[data-cards="doux"] .wz-rail,
 :root[data-cards="doux"] .topbar,
 :root[data-cards="doux"] .footer{ background:#fff; }
+
+/* §23 — accompagnement contextuel premier run (jamais un tour balisé) */
+.firstrun-hint{ position:relative; display:flex; gap:12px; align-items:flex-start; max-width:440px; margin:22px auto 0; padding:14px 16px; border:1px solid var(--line); border-radius:14px; background:var(--info-bg); text-align:left; }
+.firstrun-spark{ width:28px; height:28px; border-radius:8px; background:#fff; color:var(--color-main); display:grid; place-items:center; flex:none; }
+.firstrun-txt{ font-size:12.5px; color:#3a3f47; line-height:1.5; }
+.firstrun-txt b{ color:var(--ink); }
+.firstrun-x{ position:absolute; top:10px; right:10px; background:transparent; border:0; color:var(--muted-soft); cursor:pointer; padding:2px; }
+.firstrun-x:hover{ color:var(--ink); }
+.link-inline{ background:none; border:0; padding:0; color:var(--color-main); font:inherit; font-weight:600; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
