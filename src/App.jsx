@@ -4,11 +4,11 @@
 import React from "react";
 import {
   Ico, STEPS, DEFAULT_CFG, LEVELS, LEVEL_KEYS, ZONES, BUSINESS_MAX_COUNTRIES,
-  DOC_METHODS, achievedLevel, coherence, effTarget, EidasTag,
+  CAPTURE_METHODS, captureLabel, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
 import { DashRail, Home, StepConfig, StepType, StepDocument, StepFace } from "./steps1.jsx";
 import {
-  StepReauth, StepScope, StepAdvanced, StepPreview, StepIntegration, newSession,
+  StepReauth, StepSignature, StepScope, StepAdvanced, StepResult, StepPreview, StepIntegration, newSession,
 } from "./steps2.jsx";
 import { ConsoleHome, ConsoleStats } from "./console.jsx";
 import { RequestsHistory, OperatorQueue } from "./requests.jsx";
@@ -27,7 +27,7 @@ function Meter({ cfg }) {
     <div className="meter">
       <div className="meter-h">
         <div className="meter-title">
-          <span className="t">Niveau eIDAS visé</span>
+          <span className="t">Niveau de risque visé</span>
           <span className="meter-src">{inherited ? "Cible héritée · config business" : "Cible définie · ce workflow"}</span>
         </div>
       </div>
@@ -149,17 +149,19 @@ function App() {
 
   function startNew() {setCfg({ ...DEFAULT_CFG });setCurrentKey("config");setView("wizard");}
   function exitToHome() {setView("home");}
-  function openWorkflow(i) {const w = workflows[i];if (!w) return;setCfg({ ...DEFAULT_CFG, ...w });setCurrentKey("integration");setView("wizard");}
+  /* §21 — l'édition repart de l'Aperçu (recap propre) plutôt que de la checklist d'intégration. */
+  function openWorkflow(i) {const w = workflows[i];if (!w) return;setCfg({ ...DEFAULT_CFG, ...w });setCurrentKey("preview");setView("wizard");}
 
   /* per-step validity + footer */
   const total = (() => {const z = cfg.zones.reduce((s, zz) => s + (ZONES.find((Z) => Z.id === zz)?.n || 0), 0);return Math.min(BUSINESS_MAX_COUNTRIES, z + cfg.countries.length);})();
   const canNext = {
     config: cfg.name.trim().length > 0 && cfg.drivers.length >= 1,
-    type: true, document: !!cfg.docMethod, face: !!cfg.faceLevel, reauth: true,
-    scope: cfg.scopeSource === "inherited" || total > 0, advanced: true, preview: true, integration: true
+    type: cfg.verifType !== "authentication" || !!cfg.authSource,
+    document: !!cfg.docPrimary, face: !!cfg.faceLevel, reauth: true, signature: true,
+    scope: cfg.scopeSource === "inherited" || total > 0, advanced: true, result: true, preview: true, integration: true
   }[currentKey];
 
-  const ctaLabel = { advanced: "Aperçu", preview: "Continuer vers l'intégration", integration: "Valider & générer le pack" }[currentKey] || "Continuer";
+  const ctaLabel = { result: "Aperçu", preview: "Continuer vers l'intégration", integration: "Valider & générer le pack" }[currentKey] || "Continuer";
 
   function goNext() {
     if (currentKey === "integration") {finalize();return;}
@@ -182,15 +184,18 @@ function App() {
   const sNum = curIdx + 1,sTot = visibleKeys.length;
 
   /* footer summary per step */
+  const usesNfc = cfg.docPrimary === "nfc" || cfg.docSecondary === "nfc";
   function footerSummary() {
     switch (currentKey) {
-      case "config":return <span className="eidas-tag subst">{cfg.eidasTarget ? "Cible · " : "Cible héritée · "}{LEVELS[effTarget(cfg)].name}</span>;
-      case "type":return cfg.authentication ? <span className="chip brand sm" style={{ fontSize: 11 }}>+ Réauthentification débloquée</span> : <span className="hint">Onboarding seul</span>;
-      case "document":case "face":case "preview":
-        return ach ? <React.Fragment><EidasTag levelKey={ach} prefix="Atteint" />{cohObj && <span className={"coh " + cohObj.cls}>{cohObj.label}</span>}</React.Fragment> : <span className="hint">Choisissez une méthode</span>;
+      case "config":return <EidasTag levelKey={effTarget(cfg)} prefix={cfg.eidasTarget ? "Cible" : "Cible héritée"} />;
+      case "type":{const m = { onboarding: "Onboarding", authentication: "Authentification", extraction: "Extraction de données" }[cfg.verifType];return <span className="chip brand sm" style={{ fontSize: 11 }}>{m}</span>;}
+      case "document":case "face":case "result":case "preview":
+        return cfg.verifType === "extraction" ? <span className="chip sm" style={{ fontSize: 11 }}>Extraction · sans niveau de risque</span> :
+          ach ? <React.Fragment><EidasTag levelKey={ach} prefix="Atteint" />{cohObj && <span className={"coh " + cohObj.cls}>{cohObj.label}</span>}</React.Fragment> : <span className="hint">Choisissez une méthode</span>;
       case "reauth":{const n = cfg.reauthOrder.filter((id) => cfg.reauthOn[id]).length;return <span className="chip brand sm" style={{ fontSize: 11 }}>{n + " méthode" + (n > 1 ? "s" : "") + " active" + (n > 1 ? "s" : "")}</span>;}
+      case "signature":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.signature === "qes" ? "QES · " : "AES · "}{cfg.sigContact === "email" ? "email" : "téléphone"}</span>;
       case "scope":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.scopeSource === "inherited" ? "Hérité du business" : total + " pays · " + cfg.docTypes.length + " documents"}</span>;
-      case "advanced":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.operatorReview ? "Avec opérateur" : "Sans opérateur"}{cfg.docMethod === "nfc_fallback" ? " · " + cfg.nfcRetry + " essais NFC" : ""}</span>;
+      case "advanced":return <span className="chip sm" style={{ fontSize: 11 }}>{cfg.operatorReview ? "Avec opérateur" : "Sans opérateur"}{usesNfc ? " · " + cfg.nfcRetry + " essais NFC" : ""}</span>;
       case "integration":return <span className={"mode-pill " + cfg.mode} style={{ fontSize: 11, margin: 0 }}><span className="d" />{cfg.mode === "live" ? "Live · facturé" : "Test · non facturé"}</span>;
       default:return null;
     }
@@ -204,8 +209,10 @@ function App() {
       case "document":return <StepDocument {...p} />;
       case "face":return <StepFace {...p} />;
       case "reauth":return <StepReauth {...p} />;
+      case "signature":return <StepSignature {...p} />;
       case "scope":return <StepScope {...p} />;
       case "advanced":return <StepAdvanced {...p} />;
+      case "result":return <StepResult {...p} />;
       case "preview":return <StepPreview {...p} />;
       case "integration":return <StepIntegration {...p} requestLive={requestLive} />;
       default:return null;
@@ -260,9 +267,9 @@ function App() {
         <p>{cfg.name || "Votre workflow"} est configuré. {cfg.mode === "live" ? "La facturation a démarré pour ce business." : "Scannez le QR avec l'app ShareID pour lancer un onboarding réel."}</p>
         <div className="done-qr"><div className="qr" /><div className="hint" style={{ maxWidth: 210, textAlign: "left" }}><b style={{ color: "var(--ink)" }}>QR de test prêt</b><br />Scannez avec l'app ShareID — valable pour un onboarding. Régénérable depuis l'intégration.</div></div>
         <div className="summary-card">
-          <div className="sr"><span className="sk">Type</span><span className="sv">{cfg.authentication ? "Onboarding + Authentification" : "Onboarding"}</span></div>
-          <div className="sr"><span className="sk">Document</span><span className="sv">{(DOC_METHODS.find((m) => m.id === cfg.docMethod) || {}).t || "—"}</span></div>
-          <div className="sr"><span className="sk">Niveau eIDAS atteint</span><span className="sv">{ach ? LEVELS[ach].name : "—"}{cohObj && cohObj.cls === "eq" ? " · cible" : ""}</span></div>
+          <div className="sr"><span className="sk">Type</span><span className="sv">{{ onboarding: "Onboarding (IDV)", authentication: "Authentification", extraction: "Extraction de données" }[cfg.verifType]}</span></div>
+          <div className="sr"><span className="sk">Document</span><span className="sv">{captureLabel(cfg.docPrimary)}</span></div>
+          <div className="sr"><span className="sk">Niveau de risque atteint</span><span className="sv">{cfg.verifType === "extraction" ? "—" : (ach ? LEVELS[ach].name : "—")}{cohObj && cohObj.cls === "eq" ? " · cible" : ""}</span></div>
           <div className="sr"><span className="sk">Mode</span><span className="sv">{cfg.mode === "live" ? "Live" : "Test"}</span></div>
         </div>
         <div className="done-actions">

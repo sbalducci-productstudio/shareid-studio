@@ -4,26 +4,26 @@
 import React from "react";
 import { BIZ_TYPES, BizBilling, BizCond, BizIdentity, BizObjective, BizRetention, BizReview, BizScope, BizType, BizUsers, EndUserPreview, RETENTION, TOKEN_PKGS, eur, flagOf, pkgOf, retLabel } from "./biz-steps.jsx";
 import { fmt, pct } from "./charts.jsx";
-import { DOC_TYPES, DocArt, EidasTag, Ico, LEVELS, LEVEL_KEYS } from "./core.jsx";
+import { DOC_TYPES, DocArt, EidasTag, Ico, LEVELS, RISK_KEYS } from "./core.jsx";
 
-function condName(type) { return { pilot: "Pilote", retailer: "Hiérarchie retailer", group: "Groupe" }[type] || "Spécifique"; }
+function condName(type) { return { retailer: "Hiérarchie retailer", group: "Groupe" }[type] || "Spécifique"; }
 function bizSteps(type) {
   const base = [
     { key: "type", nm: "Type de business", Comp: BizType },
     { key: "identity", nm: "Identité", Comp: BizIdentity },
-    { key: "objective", nm: "Objectif & eIDAS", Comp: BizObjective },
+    { key: "objective", nm: "Risque & opérateur", Comp: BizObjective },
     { key: "scope", nm: "Périmètre", Comp: BizScope },
     { key: "retention", nm: "Rétention", Comp: BizRetention },
-    { key: "users", nm: "Utilisateurs", Comp: BizUsers },
+    { key: "users", nm: "Rôles & contacts", Comp: BizUsers },
   ];
-  if (type !== "standard") base.push({ key: "cond", nm: condName(type), Comp: BizCond });
+  if (type === "group" || type === "retailer") base.push({ key: "cond", nm: condName(type), Comp: BizCond });
   base.push({ key: "billing", nm: "Facturation", Comp: BizBilling });
   base.push({ key: "review", nm: "Récapitulatif", Comp: BizReview });
   return base;
 }
 function bizValid(key, b) {
   switch (key) {
-    case "identity": return b.name.trim().length > 0;
+    case "identity": return b.name.trim().length > 0 && b.color && b.colorSecondary;
     case "objective": return b.drivers.length >= 1;
     case "scope": return b.countries.length >= 1 && b.docTypes.length >= 1;
     case "users": return b.owner.name.trim() && b.owner.email.trim();
@@ -31,9 +31,10 @@ function bizValid(key, b) {
   }
 }
 export function bizStatus(b) {
-  if (b.type === "pilot") return { label: "Pilote · test", cls: "pilot" };
+  if (b.isPilot) return { label: "Pilote · test", cls: "pilot" };
   if (b.type === "retailer") return { label: "Retailer · actif", cls: "active" };
   if (b.type === "group") return { label: "Groupe · actif", cls: "active" };
+  if (b.type === "payg") return { label: "Pay-as-you-go · actif", cls: "active" };
   return { label: "Actif · live", cls: "active" };
 }
 export function bizInitials(name) { return (name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
@@ -78,7 +79,7 @@ export function BizList({ businesses, onCreate, onOpen }) {
                           <td><div className="wf-row-nm"><span className="biz-mk sm" style={{ background: "color-mix(in srgb," + b.color + " 14%,#fff)", color: b.color }}>{b.logo ? <img src={b.logo} alt="" style={{ width: 16 }} /> : bizInitials(b.name)}</span><span className="wf-row-t">{b.name || "Business sans nom"}</span></div></td>
                           <td><span className="type-badge">{bt.t}</span></td>
                           <td><span className={"status-pill " + st.cls}><span className="d" />{st.label}</span></td>
-                          <td>{b.type === "pilot" ? <span className="wf-row-sub">—</span> : <div className="conso-cell"><div className="conso-track"><div className="conso-bar" style={{ width: conso + "%", background: conso >= 80 ? "var(--color-error)" : "var(--color-main)" }} /></div><span className="conso-pct">{conso} %</span></div>}</td>
+                          <td>{b.isPilot ? <span className="wf-row-sub">—</span> : <div className="conso-cell"><div className="conso-track"><div className="conso-bar" style={{ width: conso + "%", background: conso >= 80 ? "var(--color-error)" : "var(--color-main)" }} /></div><span className="conso-pct">{conso} %</span></div>}</td>
                           <td><span className="wf-row-sub">{b.owner && b.owner.name ? b.owner.name : "—"}</span></td>
                           <td className="ta-r"><span className="wf-row-sub">{b.modified || "à l'instant"}</span><Ico name="chevR" size={15} sw={2} style={{ marginLeft: 10, color: "var(--muted-soft)", verticalAlign: "middle" }} /></td>
                         </tr>);
@@ -123,7 +124,7 @@ export function BizWizard({ draft, setDraft, onFinish, onExit }) {
           </div>
           <div className="biz-rail-meta">
             <div className="brm-row"><span className="brm-k">Type</span><span className="brm-v">{bt.t}</span></div>
-            <div className="brm-row"><span className="brm-k">eIDAS min.</span><EidasTag levelKey={draft.eidasMin} prefix="" /></div>
+            <div className="brm-row"><span className="brm-k">Risque max.</span><EidasTag levelKey={draft.riskMax} prefix="" /></div>
             <div className="brm-row"><span className="brm-k">Facturation</span><span className="brm-v">{pkgOf(draft.pkg).t} · {fmt(pkgOf(draft.pkg).tokens)}</span></div>
           </div>
         </aside>
@@ -178,15 +179,16 @@ export function BizEdit({ biz, onSave, onBack }) {
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Titre principal end-user</span><input className="inp" value={b.euTitle} onChange={(e) => set({ euTitle: e.target.value })} /></div>
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Titre secondaire</span><input className="inp" value={b.euSubtitle} onChange={(e) => set({ euSubtitle: e.target.value })} /></div>
               <div className="field" style={{ marginTop: 12 }}><span className="lab">Libellé du bouton</span><input className="inp" value={b.euCta} onChange={(e) => set({ euCta: e.target.value })} /></div>
-              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur</span><div className="swatches">{["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"].map((c) => <button key={c} className={"swatch" + (b.color === c ? " on" : "")} style={{ background: c }} onClick={() => set({ color: c })}>{b.color === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
+              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur primaire</span><div className="swatches">{["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"].map((c) => <button key={c} className={"swatch" + (b.color === c ? " on" : "")} style={{ background: c }} onClick={() => set({ color: c })}>{b.color === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
+              <div className="field" style={{ marginTop: 12 }}><span className="lab">Couleur secondaire</span><div className="swatches">{["#3253D1", "#1F6F5B", "#7A3DBE", "#C0392B", "#0E1116", "#D98324"].map((c) => <button key={c} className={"swatch" + (b.colorSecondary === c ? " on" : "")} style={{ background: c }} onClick={() => set({ colorSecondary: c })}>{b.colorSecondary === c && <Ico name="check" size={12} sw={3} />}</button>)}</div></div>
             </div>
             <div className="biz-preview-col"><EndUserPreview biz={b} scale={0.82} /></div>
           </div>
         </EditSection>
 
-        <EditSection icon="fileCheck" title="Objectif & eIDAS" guard="≥ niveau des workflows live">
-          <div className="opts g3" style={{ maxWidth: 560 }}>
-            {LEVEL_KEYS.map((k) => <button key={k} className={"opt col" + (b.eidasMin === k ? " sel" : "")} onClick={() => set({ eidasMin: k })} style={{ paddingTop: 14 }}>{b.eidasMin === k && <span className="mark" style={{ position: "absolute", top: 12, right: 12 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}<div className="ot">{LEVELS[k].name}</div></button>)}
+        <EditSection icon="fileCheck" title="Niveau de risque maximum" guard="plafond ≥ niveau des workflows live">
+          <div className="opts g2-doc" style={{ maxWidth: 560 }}>
+            {RISK_KEYS.map((k) => <button key={k} className={"opt col" + (b.riskMax === k ? " sel" : "")} onClick={() => set({ riskMax: k })} style={{ paddingTop: 14 }}>{b.riskMax === k && <span className="mark" style={{ position: "absolute", top: 12, right: 12 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}<div className="ot">{LEVELS[k].name}</div></button>)}
           </div>
         </EditSection>
 

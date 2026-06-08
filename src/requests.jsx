@@ -11,13 +11,35 @@ const STATUS_META = {
 };
 function PII({ blur, children }) { return <span className={"pii" + (blur ? " blurred" : "")}>{children}</span>; }
 
-/* ----------------------------- Requests History ----------------------------- */
+/* §18 — deux usages : « finance / conformité » (colonnes, vues sauvegardées, export Excel)
+   et « dev / debug » (détail d'une requête via le drawer). Vues prédéfinies = presets de colonnes. */
+const ALL_COLS = [
+  { id: "name", h: "Nom", cell: (r, blur) => <div className="req-name"><span className="req-ava">{r.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}</span><PII blur={blur}>{r.name}</PII></div> },
+  { id: "dob", h: "Naissance", cell: (r, blur) => <PII blur={blur}>{r.dob}</PII> },
+  { id: "doc", h: "Document", cell: (r) => <span className="wf-row-sub">{r.doc}</span> },
+  { id: "business", h: "Business", cell: (r) => <span className="wf-row-sub">{r.business}</span> },
+  { id: "date", h: "Date", cell: (r) => <span className="wf-row-sub mono" style={{ fontSize: 11.5 }}>{r.date.slice(5)}</span> },
+  { id: "method", h: "Méthode", cell: (r) => <span className="method-tag">{r.method}</span> },
+  { id: "level", h: "Niveau", cell: (r) => <EidasTag levelKey={r.level} prefix="" /> },
+  { id: "verdict", h: "Verdict", cell: (r) => { const sm = STATUS_META[r.status]; return <span className={"status-pill " + sm.cls}><span className="d" />{sm.label}{r.status !== "review" && <b className="vscore">{r.score}</b>}</span>; } },
+];
+const SAVED_VIEWS = {
+  standard: ["name", "dob", "doc", "business", "date", "method", "level", "verdict"],
+  finance: ["business", "date", "method", "level", "verdict"],
+  compliance: ["name", "dob", "doc", "date", "level", "verdict"],
+};
 export function RequestsHistory() {
   const [blur, setBlur] = React.useState(() => localStorage.getItem("req_blur") === "1");
   const [tab, setTab] = React.useState("active");
   const [status, setStatus] = React.useState("all");
   const [sel, setSel] = React.useState(null);
+  const [savedView, setSavedView] = React.useState("standard");
+  const [cols, setCols] = React.useState(SAVED_VIEWS.standard);
+  const [colMenu, setColMenu] = React.useState(false);
   function toggleBlur() { const v = !blur; setBlur(v); try { localStorage.setItem("req_blur", v ? "1" : "0"); } catch (e) {} }
+  function applyView(v) { setSavedView(v); setCols(SAVED_VIEWS[v]); }
+  function toggleCol(id) { setSavedView("custom"); setCols((c) => c.includes(id) ? c.filter((x) => x !== id) : ALL_COLS.filter((x) => c.includes(x.id) || x.id === id).map((x) => x.id)); }
+  const visCols = ALL_COLS.filter((c) => cols.includes(c.id));
   const rows = REQUESTS.filter((r) => status === "all" || r.status === status);
   return (
     <React.Fragment>
@@ -25,7 +47,8 @@ export function RequestsHistory() {
         <div className="dt-head"><div className="eyebrow">Console</div><h1>Requêtes</h1></div>
         <div className="topbar-controls">
           <button className={"sid-btn outline sm-btn" + (blur ? " on" : "")} onClick={toggleBlur}><Ico name="eye" size={14} sw={1.8} />{blur ? "Données masquées" : "Masquer les données"}</button>
-          <button className="sid-btn inverse sm-btn"><Ico name="share" size={13} sw={1.8} />Export CSV</button>
+          <button className="sid-btn outline sm-btn"><Ico name="share" size={13} sw={1.8} />Export CSV</button>
+          <button className="sid-btn inverse sm-btn"><Ico name="doc" size={13} sw={1.8} />Export Excel</button>
         </div>
       </div>
       <div className="dash-body console-body">
@@ -37,8 +60,17 @@ export function RequestsHistory() {
           {[["all", "Tous"], ["ok", "Succès"], ["retry", "Reprise"], ["fail", "Échec"], ["review", "En attente operator"]].map(([id, nm]) =>
             <button key={id} className={"filter-chip" + (status === id ? " on" : "")} onClick={() => setStatus(id)}>{nm}</button>)}
           <div className="ctrl-div" />
-          <button className="filter-chip"><Ico name="layers" size={13} sw={1.8} />Workflow</button>
-          <button className="filter-chip"><Ico name="globe" size={13} sw={1.8} />Pays</button>
+          {/* §18 — vues récurrentes sauvegardées (presets de colonnes) */}
+          {[["standard", "Standard"], ["finance", "Finance"], ["compliance", "Conformité"]].map(([id, nm]) =>
+            <button key={id} className={"filter-chip" + (savedView === id ? " on" : "")} onClick={() => applyView(id)}><Ico name="book" size={13} sw={1.8} />{nm}</button>)}
+          <div className="ctrl-div" />
+          <div style={{ position: "relative" }}>
+            <button className={"filter-chip" + (colMenu ? " on" : "")} onClick={() => setColMenu((v) => !v)}><Ico name="rows" size={13} sw={1.8} />Colonnes</button>
+            {colMenu &&
+              <div className="combo-pop" style={{ right: 0, left: "auto", minWidth: 190 }}>
+                {ALL_COLS.map((c) => <button key={c.id} className="combo-opt" onClick={() => toggleCol(c.id)}><span className={"mark sq" + (cols.includes(c.id) ? "" : "")} style={cols.includes(c.id) ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}><Ico name="check" size={11} sw={3} style={cols.includes(c.id) ? { opacity: 1 } : { opacity: 0 }} /></span>{c.h}</button>)}
+              </div>}
+          </div>
         </div>
 
         {tab === "archived" ?
@@ -46,25 +78,16 @@ export function RequestsHistory() {
           <div className="wf-table-wrap">
             <div className="wf-table-scroll">
               <table className="wf-table req-table">
-                <thead><tr><th>Nom</th><th>Naissance</th><th>Document</th><th>Business</th><th>Date</th><th>Méthode</th><th>Niveau</th><th>Verdict</th></tr></thead>
+                <thead><tr>{visCols.map((c) => <th key={c.id}>{c.h}</th>)}</tr></thead>
                 <tbody>
-                  {rows.map((r) => {
-                    const sm = STATUS_META[r.status];
-                    return (
-                      <tr key={r.id} className="wf-row" onClick={() => setSel(r)}>
-                        <td><div className="req-name"><span className="req-ava">{r.name.split(" ").map((w) => w[0]).slice(0, 2).join("")}</span><PII blur={blur}>{r.name}</PII></div></td>
-                        <td><PII blur={blur}>{r.dob}</PII></td>
-                        <td><span className="wf-row-sub">{r.doc}</span></td>
-                        <td><span className="wf-row-sub">{r.business}</span></td>
-                        <td><span className="wf-row-sub mono" style={{ fontSize: 11.5 }}>{r.date.slice(5)}</span></td>
-                        <td><span className="method-tag">{r.method}</span></td>
-                        <td><EidasTag levelKey={r.level} prefix="" /></td>
-                        <td><span className={"status-pill " + sm.cls}><span className="d" />{sm.label}{r.status !== "review" && <b className="vscore">{r.score}</b>}</span></td>
-                      </tr>);
-                  })}
+                  {rows.map((r) => (
+                    <tr key={r.id} className="wf-row" onClick={() => setSel(r)}>
+                      {visCols.map((c) => <td key={c.id}>{c.cell(r, blur)}</td>)}
+                    </tr>))}
                 </tbody>
               </table>
             </div>
+            <div className="req-foot-hint"><Ico name="info" size={13} sw={1.8} />Vue <b>{savedView === "custom" ? "personnalisée" : savedView}</b> · cliquez une ligne pour le détail dev / debug · les vues sont sauvegardées et ré-applicables.</div>
           </div>}
       </div>
       {sel && <RequestDrawer r={sel} blur={blur} onClose={() => setSel(null)} />}

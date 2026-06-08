@@ -60,21 +60,58 @@ export function Ico({ name, size = 18, sw = 1.75, fill = false, style }) {
 }
 
 /* ----------------------------- domain ----------------------------- */
-export const LEVELS = { low: { rank: 1, name: "Faible" }, subst: { rank: 2, name: "Substantiel" }, high: { rank: 3, name: "Élevé" } };
-export const LEVEL_KEYS = ["low", "subst", "high"];
+/* Niveau de RISQUE — 4 paliers exposés au client. Wording international : on ne parle plus
+   d'« eIDAS » ni de « conformité » dans l'UI. Mapping interne eIDAS (jamais affiché tel quel) :
+   Faible→faible · Moyen→substantiel · Élevé→élevé. « Pas de risque » = parcours sans vérification
+   d'identité (OCR / extraction de données seule, voir le type de parcours non-IDV du builder).
+   Les clés internes (low/subst/high) sont conservées pour ne pas casser la logique existante ;
+   seuls les libellés changent. RISK_KEYS expose les 4 paliers, LEVEL_KEYS les 3 paliers IDV. */
+export const LEVELS = {
+  none: { rank: 0, name: "Pas de risque", eidas: null },
+  low: { rank: 1, name: "Faible", eidas: "faible" },
+  subst: { rank: 2, name: "Moyen", eidas: "substantiel" },
+  high: { rank: 3, name: "Élevé", eidas: "élevé" },
+};
+export const LEVEL_KEYS = ["low", "subst", "high"]; // paliers avec vérification d'identité
+export const RISK_KEYS = ["none", "low", "subst", "high"]; // les 4 paliers de risque côté client
 
 export const DRIVERS = [
   { id: "fraud", icon: "shieldAlert", t: "Lutte contre la fraude", d: "Détecter et bloquer les usurpations d'identité." },
-  { id: "compliance", icon: "fileCheck", t: "Conformité réglementaire", d: "eIDAS, Code monétaire et financier, autres obligations." },
+  { id: "compliance", icon: "fileCheck", t: "Obligations réglementaires", d: "KYC/AML, lutte anti-blanchiment et obligations sectorielles." },
   { id: "experience", icon: "zap", t: "Amélioration de l'expérience", d: "Fluidifier le parcours et réduire les frictions." },
 ];
 
-export const DOC_METHODS = [
-  { id: "nfc", t: "NFC", level: "high", d: "Lecture de la puce. Nécessite un document et un téléphone compatibles NFC.", pad: "na", iad: "na" },
-  { id: "nfc_fallback", t: "NFC avec fallback vidéo", level: "subst", d: "Tente le NFC, bascule en capture vidéo en cas d'échec.", pad: "req", iad: "opt" },
-  { id: "video", t: "Vidéo", level: "subst", d: "Capture vidéo du document.", pad: "req", iad: "opt" },
-  { id: "photo", t: "Photo", level: "low", d: "Capture photo unique.", pad: "opt", iad: "na" },
+/* §10 — un workflow = un use case = UN type de vérification (jamais deux à la fois). */
+export const VERIF_TYPES = [
+  { id: "onboarding", icon: "userCheck", t: "Onboarding (IDV)", d: "Vérifier l'identité d'un nouvel utilisateur : capture document + visage." },
+  { id: "authentication", icon: "refresh", t: "Authentification", d: "Ré-identifier un utilisateur déjà onboardé. Nécessite une source d'identité." },
+  { id: "extraction", icon: "doc", t: "Extraction de données", d: "Parcours simple / digitalisation : OCR seul, sans vérification d'identité (non-IDV)." },
 ];
+
+/* §10 — sources possibles pour une authentification (sinon : alerte « pas de workflow d'onboarding »). */
+export const AUTH_SOURCES = [
+  { id: "onboarding_wf", t: "Workflow d'onboarding existant", d: "S'appuie sur un onboarding déjà réalisé dans ce business." },
+  { id: "trusted", t: "Trusted source", d: "Source d'identité tierce de confiance." },
+  { id: "wallet", t: "Wallet", d: "Identité portée par un wallet (EUDI)." },
+  { id: "default_account", t: "Compte par défaut", d: "Photo de référence déjà présente en base." },
+];
+
+/* §15 — niveau de signature électronique. Détermine la capture email/téléphone (étape Signature). */
+export const SIGNATURE_LEVELS = [
+  { id: "none", t: "Aucune", d: "Pas de signature électronique." },
+  { id: "aes", t: "AES — avancée", d: "Données déclarées + un document. Capture email ou téléphone requise." },
+  { id: "qes", t: "QES — qualifiée", d: "Onboarding complet + document + téléphone. Capture email ou téléphone requise." },
+];
+
+/* §11 — méthodes de capture du DOCUMENT (collecte des infos du citoyen). Toujours nommées
+   « Document via … », jamais la méthode seule, et jamais « Identité » (qui inclut le visage). */
+export const CAPTURE_METHODS = [
+  { id: "photo", t: "Photo", icon: "doc", level: "low", pad: "opt", iad: "na", d: "Capture photo du document." },
+  { id: "video", t: "Vidéo", icon: "video", level: "subst", pad: "req", iad: "opt", d: "Capture vidéo du document." },
+  { id: "nfc", t: "NFC", icon: "smartphone", level: "high", pad: "na", iad: "na", d: "Lecture de la puce du document." },
+  { id: "wallet", t: "Wallet", icon: "wallet", level: "high", pad: "na", iad: "na", soon: true, d: "Identité issue d'un wallet. Niveau élevé, moins cher." },
+];
+export function captureLabel(id) { const m = CAPTURE_METHODS.find((x) => x.id === id); return m ? "Document via " + m.t : "—"; }
 
 export const FACE_PRESETS = [
   { id: "photo", icon: "faceScan", dim: true, level: "low", t: "Photo simple", d: "Selfie unique." },
@@ -103,10 +140,11 @@ export const ZONES = [
 export const COUNTRY_SUGGEST = ["France", "Belgique", "Italie", "Espagne", "Allemagne", "Portugal", "Pays-Bas", "Maroc", "Royaume-Uni", "Suisse", "Luxembourg", "Irlande"];
 export const BUSINESS_MAX_COUNTRIES = 156;
 
-/* eIDAS achieved level = minimum of the document method and the face control. */
+/* Niveau de risque atteint = minimum de la méthode de capture document et du contrôle visage.
+   L'extraction de données (non-IDV) n'a pas de niveau de risque. */
 export function achievedLevel(cfg) {
-  if (!cfg.docMethod) return null;
-  const dm = DOC_METHODS.find((x) => x.id === cfg.docMethod);
+  if (cfg.verifType === "extraction") return null;
+  const dm = CAPTURE_METHODS.find((x) => x.id === cfg.docPrimary);
   if (!dm) return null;
   const fp = FACE_PRESETS.find((x) => x.id === cfg.faceLevel);
   const docRank = LEVELS[dm.level].rank;
@@ -121,32 +159,46 @@ export function coherence(achievedKey, targetKey) {
   if (a < t) return { cls: "down", label: "↓ sous la cible", long: "Sous la cible" };
   return { cls: "up", label: "↑ au-delà", long: "Au-delà de la cible" };
 }
-export function eidasTagCls(key) { return key === "high" ? "high" : key === "subst" ? "subst" : "low"; }
+export function eidasTagCls(key) { return key === "high" ? "high" : key === "subst" ? "subst" : key === "none" ? "none" : "low"; }
 
-/* eIDAS target is inherited from the business config; the workflow may override it. */
-export const BUSINESS_EIDAS = "subst";
+/* Le niveau de risque cible est hérité de la config business ; le workflow peut le surcharger. */
+export const BUSINESS_EIDAS = "subst"; // cible business par défaut = Moyen (interne : substantiel)
+/* §16 — plafond de risque autorisé par le contrat business (cf. riskMax du Business Setup).
+   Si un workflow dépasse ce plafond, l'intégration affiche un état d'erreur « contrat ». */
+export const BUSINESS_RISK_MAX = "high";
+export function exceedsBusinessMax(cfg) {
+  const ach = achievedLevel(cfg);
+  return !!ach && LEVELS[ach].rank > LEVELS[BUSINESS_RISK_MAX].rank;
+}
 export function effTarget(cfg) { return cfg.eidasTarget || BUSINESS_EIDAS; }
 
-/* Wizard steps. cond steps drop out when their predicate is false. */
+/* Étapes du wizard. Les étapes `cond` disparaissent quand leur prédicat est faux — le type de
+   vérification (§10) pilote réellement les étapes en aval : pas de visage en extraction de données,
+   réauth seulement en authentification, signature seulement si AES/QES. */
 export const STEPS = [
-  { n: 1, key: "config", nm: "Configuration" },
-  { n: 2, key: "type", nm: "Type de vérification" },
-  { n: 3, key: "reauth", nm: "Réauthentification", cond: (c) => c.authentication },
-  { n: 4, key: "document", nm: "Document" },
-  { n: 5, key: "face", nm: "Visage" },
-  { n: 6, key: "scope", nm: "Périmètre" },
-  { n: 7, key: "advanced", nm: "Options avancées" },
-  { n: 8, key: "preview", nm: "Aperçu" },
-  { n: 9, key: "integration", nm: "Intégration" },
+  { key: "config", nm: "Configuration" },
+  { key: "type", nm: "Type de vérification" },
+  { key: "document", nm: "Document" },
+  { key: "face", nm: "Visage", cond: (c) => c.verifType !== "extraction" },
+  { key: "reauth", nm: "Réauthentification", cond: (c) => c.verifType === "authentication" },
+  { key: "signature", nm: "Signature", cond: (c) => c.signature && c.signature !== "none" },
+  { key: "scope", nm: "Périmètre" },
+  { key: "advanced", nm: "Options avancées" },
+  { key: "result", nm: "Résultat" },
+  { key: "preview", nm: "Aperçu" },
+  { key: "integration", nm: "Intégration" },
 ];
 
 export const DEFAULT_CFG = {
   name: "",
   drivers: [],
   eidasTarget: null,
-  onboarding: true,
-  authentication: false,
-  docMethod: null,
+  verifType: "onboarding",        // §10 — onboarding | authentication | extraction
+  authSource: "onboarding_wf",    // §10 — source d'identité pour l'authentification
+  signature: "none",              // §15 — none | aes | qes
+  sigContact: "email",            // §15 — email | phone (jamais les deux)
+  docPrimary: null,               // §11 — méthode de capture principale
+  docSecondary: null,             // §11 — méthode secondaire (fallback)
   pad: true,
   iad: false,
   faceLevel: "video_pad_iad",
@@ -156,16 +208,24 @@ export const DEFAULT_CFG = {
   zones: ["eu"],
   countries: [],
   docTypes: ["id_card", "passport"],
-  operatorReview: true,
+  operatorReview: true,           // §13 — hérité du business ; ici on affine le niveau
   operatorMode: "always",
-  nfcRetry: 3,
+  nfcRetry: 3,                    // §11 — uniquement si NFC
+  // §13bis — matching & capture d'infos (repliés par défaut)
+  matchPhoto: false, matchIdentity: false, scopeCheck: false, scopeCheckSkip: false,
+  // §14 — résultat
+  resultMode: "light",            // light | heavy
+  includeCrops: false, includeFaceCrop: false, sendAssets: true, ocrTemporal: false,
+  wfRetentionDays: 0,             // 0 = hérite du business ; sinon ≥ business
   fetchResult: true,
   callback: true,
   mode: "test",
 };
 
 /* small shared atoms */
-export function EidasTag({ levelKey, prefix = "eIDAS" }) {
+/* Pastille de niveau de risque. (Nom historique EidasTag conservé pour ne pas casser les imports —
+   l'UI affiche bien « Risque · … », jamais « eIDAS ».) */
+export function EidasTag({ levelKey, prefix = "Risque" }) {
   if (!levelKey) return null;
   return <span className={"eidas-tag " + eidasTagCls(levelKey)}>{prefix ? prefix + " · " : ""}{LEVELS[levelKey].name}</span>;
 }

@@ -159,7 +159,7 @@ function InviteModal({ onClose, onAdd }) {
 
 /* ----------------------------- Product Demo ----------------------------- */
 const DEMO_SCENARIOS = [
-  { id: "onb_nfc", icon: "fileCheck", t: "Onboarding NFC", d: "Lecture de puce + liveness. Niveau eIDAS élevé.", level: "high" },
+  { id: "onb_nfc", icon: "fileCheck", t: "Onboarding NFC", d: "Lecture de puce + liveness. Niveau de risque élevé.", level: "high" },
   { id: "onb_photo", icon: "doc", t: "Onboarding photo", d: "Capture photo simple du document et selfie.", level: "low" },
   { id: "auth_smile", icon: "smile", t: "Réauthentification MFA Smile", d: "Ré-identification rapide, sans nouvelle capture.", level: "subst" },
 ];

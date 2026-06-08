@@ -1,9 +1,13 @@
 /* ShareID Studio — Home + Steps 1–4 */
 import React from "react";
 import {
-  Ico, DRIVERS, DOC_METHODS, FACE_PRESETS, LEVELS, LEVEL_KEYS,
-  achievedLevel, coherence, effTarget, EidasTag,
+  Ico, DRIVERS, VERIF_TYPES, AUTH_SOURCES, SIGNATURE_LEVELS, CAPTURE_METHODS, captureLabel,
+  FACE_PRESETS, LEVELS, LEVEL_KEYS, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
+
+/* Libellé court du type de vérification d'un workflow (cartes / tableau). */
+function verifLabel(w) { return { onboarding: "Onboarding (IDV)", authentication: "Authentification", extraction: "Extraction de données" }[w.verifType] || "Onboarding (IDV)"; }
+function wfLevel(w) { return w.verifType === "extraction" ? "none" : (achievedLevel(w) || effTarget(w)); }
 
 export function DashRail({ active = "wf_builder", count = 0, onNav }) {
   const groups = [
@@ -69,6 +73,9 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
   const empty = workflows.length === 0;
   // Vue choisie (cartes / tableau), mémorisée entre les sessions.
   const [view, setView] = React.useState(() => localStorage.getItem("wf_view") || "cards");
+  // §23 — accompagnement léger et contextuel à la première connexion (jamais un tour « étape 1/2/3 »).
+  const [hint, setHint] = React.useState(() => localStorage.getItem("wf_hint_dismissed") !== "1");
+  function dismissHint() { setHint(false); try { localStorage.setItem("wf_hint_dismissed", "1"); } catch (e) {} }
   function pickView(v) { setView(v); try { localStorage.setItem("wf_view", v); } catch (e) {} }
   return (
     <div className="app">
@@ -91,6 +98,14 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
                 <div className="de-cta">
                   <button className="sid-btn primary" onClick={onStart}><Ico name="plus" size={16} sw={2.2} />Créer un workflow</button>
                 </div>
+                {hint &&
+                  <div className="firstrun-hint">
+                    <button className="firstrun-x" onClick={dismissHint} aria-label="Masquer"><Ico name="x" size={13} sw={2.2} /></button>
+                    <span className="firstrun-spark"><Ico name="sparkle" size={15} sw={2} /></span>
+                    <div className="firstrun-txt">
+                      <b>Bien démarrer</b> — votre workflow hérite de la config business. Vous pouvez d'abord <button className="link-inline" onClick={() => onNav && onNav("biz_setup")}>compléter le business setup</button> (logo, contacts…), puis lancer ce premier workflow. Tout reste modifiable plus tard.
+                    </div>
+                  </div>}
               </div>
             ) : (
               <div className="wf-list">
@@ -104,7 +119,7 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
                 {view === "cards" ? (
                   <div className="wf-grid">
                     {workflows.map((w, i) => {
-                      const lvl = achievedLevel(w) || effTarget(w);
+                      const lvl = wfLevel(w);
                       return (
                         <button className="wf-card" key={i} onClick={() => onOpen(i)}>
                           <div className="wf-card-top">
@@ -114,7 +129,7 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
                           <div className="wf-card-nm">{w.name || "Workflow sans titre"}</div>
                           <div className="wf-card-meta">
                             <EidasTag levelKey={lvl} prefix="" />
-                            <span className="wf-card-sub">{w.authentication ? "Onboarding + Authentification" : "Onboarding"}</span>
+                            <span className="wf-card-sub">{verifLabel(w)}</span>
                           </div>
                           <div className="wf-card-foot">
                             <span className="wf-open">Ouvrir<Ico name="chevR" size={14} sw={2} /></span>
@@ -137,14 +152,14 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
                           <tr>
                             <th>Nom</th>
                             <th>Mode</th>
-                            <th>Niveau eIDAS</th>
+                            <th>Niveau de risque</th>
                             <th>Type</th>
                             <th className="ta-r">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {workflows.map((w, i) => {
-                            const lvl = achievedLevel(w) || effTarget(w);
+                            const lvl = wfLevel(w);
                             return (
                               <tr key={i} className="wf-row" onClick={() => onOpen(i)}>
                                 <td>
@@ -155,7 +170,7 @@ export function Home({ workflows, onStart, onOpen, onQr, onNav }) {
                                 </td>
                                 <td><span className={"mode-pill " + w.mode} style={{ margin: 0, fontSize: 10.5 }}><span className="d" />{w.mode === "live" ? "Live" : "Test"}</span></td>
                                 <td><EidasTag levelKey={lvl} prefix="" /></td>
-                                <td><span className="wf-row-sub">{w.authentication ? "Onboarding + Authentification" : "Onboarding"}</span></td>
+                                <td><span className="wf-row-sub">{verifLabel(w)}</span></td>
                                 <td className="ta-r">
                                   <div className="wf-row-act">
                                     <span className="row-qr" onClick={(e) => { e.stopPropagation(); onQr(w); }} title="Afficher le QR de test"><Ico name="smartphone" size={13} sw={1.7} />QR</span>
@@ -249,79 +264,145 @@ export function StepConfig({ cfg, set, stepNum, stepTotal }) {
 
 /* ---------------- Step 2 — Type de vérification ---------------- */
 export function StepType({ cfg, set, stepNum, stepTotal }) {
-  function toggleAuth() {
-    if (cfg.authentication) set({ authentication: false });
-    else set({ authentication: true, onboarding: true });
+  // §10 — un seul type à la fois ; le choix change réellement les étapes en aval.
+  function pick(id) {
+    const patch = { verifType: id };
+    if (id !== "authentication") patch.authSource = "onboarding_wf";
+    if (id === "extraction") patch.signature = "none"; // pas de signature ni de visage en extraction
+    set(patch);
   }
+  const isExtraction = cfg.verifType === "extraction";
   return (
     <div className="body-inner step-anim">
-      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Type de vérification</h2><p className="sub">Choisissez ce que ce workflow doit accomplir.</p></div>
-      <div className="opts" style={{ maxWidth: 600, marginBottom: 18 }}>
-        <div className="opt sel" style={{ cursor: cfg.authentication ? "not-allowed" : "default" }}>
-          <span className="ico-tile"><Ico name="userCheck" size={19} /></span>
-          <div className="obody">
-            <div className="otop"><span className="ot">Onboarding (IDV)</span>{cfg.authentication
-              ? <span className="chip sm" style={{ gap: 4 }}><Ico name="lock" size={10} sw={2.2} />requis</span>
-              : <span className="chip brand sm">base</span>}</div>
-            <div className="od">Vérification d'identité d'un nouvel utilisateur : capture et contrôle du document et du visage.</div>
+      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Type de vérification</h2><p className="sub">Un workflow = un use case. Le type choisi adapte réellement les étapes suivantes.</p></div>
+      <div className="opts" style={{ maxWidth: 620, marginBottom: 18 }}>
+        {VERIF_TYPES.map((t) => {
+          const sel = cfg.verifType === t.id;
+          return (
+            <button key={t.id} className={"opt" + (sel ? " sel" : "")} onClick={() => pick(t.id)}>
+              <span className={"ico-tile" + (sel ? "" : " dim")}><Ico name={t.icon} size={19} /></span>
+              <div className="obody"><div className="otop"><span className="ot">{t.t}</span></div><div className="od">{t.d}</div></div>
+              <span className={"mark sq"} style={sel ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}><Ico name="check" size={12} sw={3} style={sel ? { opacity: 1 } : null} /></span>
+            </button>);
+        })}
+      </div>
+
+      {cfg.verifType === "authentication" && (
+        <section className="cfg-sec" style={{ maxWidth: 620 }}>
+          <div className="cfg-sec-h"><span className="cfg-sec-t">Source d'identité</span></div>
+          <div className="opts g2-doc">
+            {AUTH_SOURCES.map((s) => {
+              const sel = cfg.authSource === s.id;
+              return (
+                <button key={s.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => set({ authSource: s.id })} style={{ paddingTop: 16 }}>
+                  {sel && <span className="mark" style={{ position: "absolute", top: 14, right: 14 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}
+                  <div className="obody" style={{ width: "100%" }}><div className="ot">{s.t}</div><div className="od">{s.d}</div></div>
+                </button>);
+            })}
           </div>
-          <span className="mark sq" style={{ borderColor: "var(--color-main)", background: "var(--color-main)" }}><Ico name="check" size={12} sw={3} style={{ opacity: 1 }} /></span>
-        </div>
-        <button className={"opt" + (cfg.authentication ? " sel" : "")} onClick={toggleAuth}>
-          <span className={"ico-tile" + (cfg.authentication ? "" : " dim")}><Ico name="refresh" size={19} /></span>
-          <div className="obody"><div className="otop"><span className="ot">Authentification</span></div><div className="od">Ré-identifier un utilisateur déjà onboardé.</div></div>
-          <span className="mark sq"><Ico name="check" size={12} sw={3} /></span>
-        </button>
-      </div>
-      <div className="note" style={{ maxWidth: 600 }}>
-        <span className="ico"><Ico name="info" size={15} sw={1.9} /></span>
-        <div>L'authentification s'appuie sur un onboarding : la sélectionner active l'onboarding et débloque l'étape <b>Réauthentification</b>. Le niveau d'authentification suit celui de l'onboarding.</div>
-      </div>
+          {cfg.authSource === "onboarding_wf" && (
+            <div className="note warn" style={{ marginTop: 14 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Cette authentification s'appuie sur un <b>workflow d'onboarding</b>. Si vous n'en avez aucun d'actif, créez-le d'abord — sinon il n'y aura aucune source à réauthentifier.</div></div>
+          )}
+        </section>
+      )}
+
+      {!isExtraction && (
+        <section className="cfg-sec" style={{ maxWidth: 620, marginTop: 18 }}>
+          <div className="cfg-sec-h"><span className="cfg-sec-t">Signature électronique</span><span className="chip sm">optionnel</span></div>
+          <div className="opts g3">
+            {SIGNATURE_LEVELS.map((s) => {
+              const sel = cfg.signature === s.id;
+              return (
+                <button key={s.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => set({ signature: s.id })} style={{ paddingTop: 16 }}>
+                  {sel && <span className="mark" style={{ position: "absolute", top: 14, right: 14 }}><Ico name="check" size={12} sw={3} /><span className="dot" /></span>}
+                  <div className="obody" style={{ width: "100%" }}><div className="ot">{s.t}</div><div className="od">{s.d}</div></div>
+                </button>);
+            })}
+          </div>
+          {cfg.signature !== "none" && <span className="hint" style={{ marginTop: 10, display: "block" }}>AES et QES débloquent l'étape <b>Signature</b> (capture email ou téléphone).</span>}
+        </section>
+      )}
+
+      {isExtraction && (
+        <div className="note" style={{ maxWidth: 620 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Parcours <b>non-IDV</b> : OCR seul. Les étapes Visage et Signature sont automatiquement retirées, et le résultat ne porte pas de niveau de risque.</div></div>
+      )}
     </div>
   );
 }
 
 /* ---------------- Step 3 — Document ---------------- */
+function MethodCard({ m, sel, disabledReason, onClick }) {
+  return (
+    <button className={"opt" + (sel ? " sel" : "")} onClick={onClick}>
+      <span className="mark"><Ico name="check" size={12} sw={3} /><span className="dot" /></span>
+      <span className={"ico-tile" + (sel ? "" : " dim")}><Ico name={m.icon} size={18} /></span>
+      <div className="obody">
+        <div className="otop"><span className="ot">{captureLabel(m.id)}</span><EidasTag levelKey={m.level} />{m.soon && <span className="statebadge na">En cours de développement</span>}</div>
+        <div className="od">{m.d}{disabledReason ? " " + disabledReason : ""}</div>
+      </div>
+    </button>);
+}
 export function StepDocument({ cfg, set, stepNum, stepTotal }) {
-  function pick(m) {
-    set({ docMethod: m.id, pad: m.pad === "req", iad: false });
+  // §11 — une méthode PRINCIPALE + une méthode SECONDAIRE (fallback), chacune « Document via … ».
+  function pickPrimary(m) {
+    set({ docPrimary: m.id, pad: m.pad === "req", iad: false, docSecondary: cfg.docSecondary === m.id ? null : cfg.docSecondary });
   }
-  const method = DOC_METHODS.find((m) => m.id === cfg.docMethod);
-  // L'IAD (anti-deepfake) ne s'applique pas aux méthodes NFC : on masque la ligne.
-  const isNfc = method && (method.id === "nfc" || method.id === "nfc_fallback");
+  function pickSecondary(m) {
+    if (m.id === cfg.docPrimary) return;
+    set({ docSecondary: cfg.docSecondary === m.id ? null : m.id });
+  }
+  const primary = CAPTURE_METHODS.find((m) => m.id === cfg.docPrimary);
+  const isNfcPrimary = primary && primary.id === "nfc";
+  const usesNfc = cfg.docPrimary === "nfc" || cfg.docSecondary === "nfc";
   const ach = achievedLevel(cfg);
   const coh = coherence(ach, effTarget(cfg));
   return (
     <div className="body-inner step-anim">
-      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Document</h2><p className="sub">Choisissez comment le document est capturé et les protections anti-fraude.</p></div>
-      <span className="lab" style={{ display: "block", marginBottom: 11 }}>Méthode de capture du document</span>
-      <div className="opts" style={{ maxWidth: 680 }}>
-        {DOC_METHODS.map((m) => {
-          const sel = cfg.docMethod === m.id;
-          return (
-            <button key={m.id} className={"opt" + (sel ? " sel" : "")} onClick={() => pick(m)}>
-              <span className="mark"><Ico name="check" size={12} sw={3} /><span className="dot" /></span>
-              <div className="obody">
-                <div className="otop"><span className="ot">{m.t}</span><EidasTag levelKey={m.level} /></div>
-                <div className="od">{m.d}</div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+      <div className="wzh"><div className="se">Étape {stepNum} / {stepTotal}</div><h2>Document</h2><p className="sub">Comment le document du citoyen est collecté : une méthode principale, et une méthode secondaire en repli si la première échoue.</p></div>
 
-      {(method && method.pad !== "na") || (method && method.iad !== "na") ? (
+      <span className="lab" style={{ display: "block", marginBottom: 11 }}>Méthode principale</span>
+      <div className="opts" style={{ maxWidth: 680 }}>
+        {CAPTURE_METHODS.map((m) => <MethodCard key={m.id} m={m} sel={cfg.docPrimary === m.id} onClick={() => pickPrimary(m)} />)}
+      </div>
+      {/* §11 — wallet en priorité : bouton de repli « je n'ai pas de wallet » → NFC. */}
+      {cfg.docPrimary === "wallet" && (
+        <button className="sid-btn ghost" style={{ marginTop: 12 }} onClick={() => pickPrimary(CAPTURE_METHODS.find((m) => m.id === "nfc"))}><Ico name="smartphone" size={14} sw={1.9} />Je n'ai pas de wallet → basculer en NFC</button>
+      )}
+
+      {primary && (
+        <React.Fragment>
+          <span className="lab" style={{ display: "block", margin: "22px 0 11px" }}>Méthode secondaire <span className="hint" style={{ fontWeight: 400 }}>· repli, optionnelle</span></span>
+          <div className="opts" style={{ maxWidth: 680 }}>
+            {CAPTURE_METHODS.filter((m) => m.id !== cfg.docPrimary).map((m) => <MethodCard key={m.id} m={m} sel={cfg.docSecondary === m.id} onClick={() => pickSecondary(m)} />)}
+          </div>
+        </React.Fragment>
+      )}
+
+      {primary && (primary.pad !== "na" || primary.iad !== "na") && (
         <div style={{ maxWidth: 680, marginTop: 22 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}><span className="lab">Protections anti-fraude</span><span className="hint" style={{ color: "var(--muted-soft)" }}>dérivées de la méthode choisie</span></div>
-          <PadIadRow id="pad" label="PAD — anti-spoofing" desc="Détection d'attaque par présentation sur le document." state={method.pad} on={cfg.pad} set={(v) => set({ pad: v })} />
-          {!isNfc && <PadIadRow id="iad" label="IAD — anti-deepfake" desc="Détection d'attaque par injection sur le flux document." state={method.iad} on={cfg.iad} set={(v) => set({ iad: v })} />}
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}><span className="lab">Protections anti-fraude</span><span className="hint" style={{ color: "var(--muted-soft)" }}>méthode principale</span></div>
+          {primary.pad !== "na" && <PadIadRow id="pad" label="PAD — anti-spoofing" desc="Détection d'attaque par présentation sur le document." state={primary.pad} on={cfg.pad} set={(v) => set({ pad: v })} />}
+          {primary.iad !== "na" && <PadIadRow id="iad" label="IAD — anti-deepfake" desc="Détection d'attaque par injection sur le flux document." state={primary.iad} on={cfg.iad} set={(v) => set({ iad: v })} />}
         </div>
-      ) : null}
+      )}
+      {isNfcPrimary && <div className="note" style={{ maxWidth: 680, marginTop: 12 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>NFC : protections anti-fraude <b>incluses par défaut</b> pour les documents compatibles. Aucune option PAD/IAD à régler.</div></div>}
+
+      {/* §11 — le délai / nombre de tentatives ne se pose QUE pour le NFC. */}
+      {usesNfc && (
+        <div style={{ maxWidth: 680, marginTop: 22 }}>
+          <span className="lab" style={{ display: "block", marginBottom: 9 }}>Tentatives NFC avant repli</span>
+          <p className="hint" style={{ marginBottom: 14 }}>Au-delà de ce nombre d'échecs NFC, le parcours bascule sur la méthode secondaire{cfg.docSecondary ? " (" + captureLabel(cfg.docSecondary).replace("Document via ", "") + ")" : ""}.</p>
+          <div className="slider" style={{ maxWidth: 360 }}>
+            <input type="range" min="2" max="5" step="1" value={cfg.nfcRetry} onChange={(e) => set({ nfcRetry: +e.target.value })} className="range-native" style={{ background: `linear-gradient(to right, var(--color-main) ${((cfg.nfcRetry - 2) / 3) * 100}%, var(--line) ${((cfg.nfcRetry - 2) / 3) * 100}%)` }} />
+            <div className="ticks">{[2, 3, 4, 5].map((n) => <button key={n} className={cfg.nfcRetry === n ? "cur" : ""} onClick={() => set({ nfcRetry: n })}>{n}</button>)}</div>
+          </div>
+        </div>
+      )}
 
       {coh && coh.cls === "down" && (
         <div className="note warn" style={{ maxWidth: 680, marginTop: 18 }}>
           <span className="ico"><Ico name="info" size={15} sw={1.9} /></span>
-          <div>Ce choix place votre workflow <b>sous votre cible eIDAS</b> ({LEVELS[effTarget(cfg)].name}). Vous pouvez continuer.</div>
+          <div>Ce choix place votre workflow <b>sous votre cible de risque</b> ({LEVELS[effTarget(cfg)].name}). Vous pouvez continuer.</div>
         </div>
       )}
     </div>
@@ -341,7 +422,7 @@ function PadIadRow({ label, desc, state, on, set }) {
 
 /* ---------------- Step 4 — Visage ---------------- */
 export function StepFace({ cfg, set, stepNum, stepTotal }) {
-  const docLevel = (DOC_METHODS.find((m) => m.id === cfg.docMethod) || {}).level;
+  const docLevel = (CAPTURE_METHODS.find((m) => m.id === cfg.docPrimary) || {}).level;
   const recoLevel = docLevel || effTarget(cfg);
   const recoId = (FACE_PRESETS.find((f) => f.level === recoLevel) || {}).id;
   const recoName = (FACE_PRESETS.find((f) => f.id === recoId) || {}).t;
@@ -362,7 +443,7 @@ export function StepFace({ cfg, set, stepNum, stepTotal }) {
       </div>
       <div className="note" style={{ maxWidth: 620, marginTop: 18 }}>
         <span className="ico"><Ico name="info" size={15} sw={1.9} /></span>
-        <div>Le visage et le document fixent ensemble votre niveau eIDAS — le niveau atteint est le <b>minimum des deux</b>. Recommandé pour votre configuration : <b>{recoName}</b>, aligné sur votre méthode document{cfg.docMethod ? "" : " et votre cible eIDAS"}.</div>
+        <div>Le visage et le document fixent ensemble votre niveau de risque — le niveau atteint est le <b>minimum des deux</b>. Suggéré pour votre configuration : <b>{recoName}</b>, aligné sur votre méthode document{cfg.docPrimary ? "" : " et votre cible de risque"}. Vous restez libre de choisir un autre niveau.</div>
       </div>
     </div>
   );
