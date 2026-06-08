@@ -36,6 +36,7 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
       items: [
         { id: "users", nm: "Utilisateurs", icon: "users" },
         { id: "business", nm: "Entreprise", icon: "building" },
+        { id: "access", nm: "Contrôle des accès", icon: "shieldAlert" },
         { id: "settings", nm: "Paramètres", icon: "settings" },
       ],
     },

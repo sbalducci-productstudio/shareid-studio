@@ -9,6 +9,10 @@ import { useSession } from "./session.jsx";
 /* Role display metadata is derived from the access-model SSoT so labels/keys
    never drift from the canonical roles. */
 const ROLE_META = ROLES;
+/* Ownership-eligible roles, derived from the SSoT: an owner is the propriétaire
+   admin (Business / Group / Retailer Admin). ShareID Admin is the platform
+   authority, not an org owner. Used to gate the "Transférer la propriété" action. */
+const OWNER_ELIGIBLE = Object.keys(ROLES).filter((r) => r.endsWith("_admin") && r !== "sid_admin");
 const USER_STATUS = { active: { nm: "Actif", cls: "active" }, disabled: { nm: "Désactivé", cls: "fail" }, pending: { nm: "En attente", cls: "review" } };
 
 const USERS_SEED = [
@@ -116,7 +120,7 @@ function UserDrawer({ u, creatable = [], onClose, onUpdate, onTransfer }) {
             <div className="role-picker">
               {roles.map(([id, nm]) => <button key={id} className={"role-opt" + (u.role === id ? " on" : "")} disabled={u.owner} onClick={() => onUpdate(u.id, { role: id })}>{nm}</button>)}
             </div>
-            {u.owner && <div className="hint" style={{ marginTop: 8 }}>L'owner ne peut pas changer de rôle sans transfert préalable.</div>}
+            {u.owner && <div className="hint" style={{ marginTop: 8 }}>L'owner ne peut être ni rétrogradé ni désactivé. Transférez d'abord la propriété à un autre admin (depuis sa fiche) — façon Figma : on ne recrée pas l'owner.</div>}
           </div>
 
           <div className="drawer-sec"><div className="drawer-sec-t">Connexion</div>
@@ -128,7 +132,7 @@ function UserDrawer({ u, creatable = [], onClose, onUpdate, onTransfer }) {
         </div>
         <div className="drawer-foot op-foot">
           <button className="sid-btn ghost"><Ico name="refresh" size={14} sw={1.9} />Forcer reset MFA</button>
-          {!u.owner && u.status === "active" && onTransfer &&
+          {!u.owner && u.status === "active" && onTransfer && OWNER_ELIGIBLE.includes(u.role) &&
             <button className="sid-btn ghost" onClick={() => onTransfer(u.id)}><Ico name="key" size={14} sw={1.9} />Transférer la propriété</button>}
           <div style={{ flex: 1 }} />
           {u.status === "disabled" ?

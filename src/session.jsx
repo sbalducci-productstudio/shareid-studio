@@ -45,24 +45,59 @@ export function SessionProvider({ children }) {
   // Default to the Business Admin org — the most common, fully-featured case.
   const [activeOrgId, setActiveOrgId] = React.useState(saved.activeOrgId || "atlas");
 
+  /* "View As" — QA impersonation. A ShareID Admin can render the Studio exactly
+     as any of the 8 roles would see it, WITHOUT changing their real membership.
+     `viewAsRole === null` means no impersonation (the real role applies). This is
+     intentionally NOT persisted: it's a transient, read-only QA mode. */
+  const [viewAsRole, setViewAsRole] = React.useState(null);
+
+  /* Configurable ◐ conditionals (Data & visibilité tab). Lets the QA tool exercise
+     both branches of a conditional rule live — e.g. a Group Admin's PII view that a
+     subsidiary may disable. An explicit override wins over the org's own setting. */
+  const [condOverrides, setCondOverrides] = React.useState({}); // { subsidiaryAllowsPII?: bool }
+
   React.useEffect(() => {
     try { localStorage.setItem(LS_KEY, JSON.stringify({ activeOrgId })); } catch (e) {}
   }, [activeOrgId]);
 
   const org = DEMO_ORGS.find((o) => o.id === activeOrgId) || DEMO_ORGS[0];
-  const role = org.role;
+  const realRole = org.role;
+  // The role the UI renders as: the impersonated role in View As, else the real one.
+  const role = viewAsRole || realRole;
+  const isViewAs = viewAsRole != null;
+
+  /* Switching real org always exits any impersonation. */
+  function switchOrg(id) { setViewAsRole(null); setActiveOrgId(id); }
+  /* Enter/leave View As. `null` exits. */
+  function setViewAs(r) { setViewAsRole(r); }
+  /* Override a ◐ conditional flag (e.g. { subsidiaryAllowsPII: false }). */
+  function setCond(patch) { setCondOverrides((c) => ({ ...c, ...patch })); }
+
+  // Subsidiary PII: explicit override wins, otherwise the org's own setting (default on).
+  const subsidiaryAllowsPII = "subsidiaryAllowsPII" in condOverrides
+    ? !!condOverrides.subsidiaryAllowsPII
+    : org.subsidiaryAllowsPII !== false;
 
   const value = {
     user: DEMO_USER,
     orgs: DEMO_ORGS,
     org,
-    role,
+    role,            // effective role (impersonated when in View As)
+    realRole,        // the user's actual role in the active org
     roleMeta: ROLES[role],
-    entity: ENTITIES[org.entity],
-    switchOrg: setActiveOrgId,
+    entity: ENTITIES[ROLES[role].entity],
+    switchOrg,
+    // View As (QA)
+    isViewAs,
+    viewAsRole,
+    setViewAs,
+    readOnly: isViewAs,        // View As never mutates data — see App mutator guards
+    // Configurable ◐ conditionals
+    condOverrides,
+    setCond,
     /* Context flags consumed by the PII selector (see selectors.js). */
     ctx: {
-      subsidiaryAllowsPII: org.subsidiaryAllowsPII !== false,
+      subsidiaryAllowsPII,
       // ShareID Sales only ever operates on demo data in this prototype.
       isDemo: role === "sid_sales",
     },

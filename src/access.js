@@ -90,6 +90,22 @@ export const ACTIONS = {
 };
 export const ACTION_KEYS = Object.keys(ACTIONS);
 
+/* Human labels for actions — verbatim from the Permissions tab. Kept here so the
+   QA tool (and any consumer) reads labels from the SSoT, never re-typing them.
+   Same order as ACTIONS so a matrix renders in the model's row order. */
+export const ACTION_LABELS = {
+  validateRejected:   "Valider les requêtes rejetées",
+  humanReview:        "Revue humaine des requêtes",
+  arbitrate:          "Arbitrer les requêtes escaladées",
+  createBizGroup:     "Créer des Business / Groupes",
+  configureBusiness:  "Configurer le scope & le branding",
+  buildWorkflows:     "Construire les workflows",
+  toggleLive:         "Basculer Test ↔ Live",
+  configureTokenCost: "Configurer le coût du token",
+  demos:              "Faire des démos / Run Authenticity",
+  contactSupport:     "Contacter le support",
+};
+
 /* ----------------------------- visibility matrix ----------------------------- */
 /* Data visibility per surface. Levels in the model:
    Aggregated/Billing/Metadata = no PII · Result/PII = PII · Raw documents = sensitive PII.
@@ -106,6 +122,32 @@ export const VISIBILITY = {
   expert:         { dashboard: N, requests: Y, detailPII: Y, rawDocs: Y }, // escalated requests only
 };
 export const VISIBILITY_SURFACES = ["dashboard", "requests", "detailPII", "rawDocs"];
+
+/* Column labels for the visibility surfaces — verbatim from the Data & visibilité tab. */
+export const SURFACE_LABELS = {
+  dashboard: "Dashboard & stats",
+  requests:  "Requêtes",
+  detailPII: "Détail / PII",
+  rawDocs:   "Documents bruts",
+};
+
+/* The 5 data levels (Data & visibilité tab), ordered least → most sensitive.
+   `pii` flags whether the level carries personal data. */
+export const DATA_LEVELS = [
+  { key: "aggregated", nm: "Agrégé",          pii: false, ex: "Volumes, taux de succès" },
+  { key: "billing",    nm: "Facturation",     pii: false, ex: "Conso de tokens, coût" },
+  { key: "metadata",   nm: "Métadonnées",     pii: false, ex: "Date, statut, type de doc, verdict" },
+  { key: "result",     nm: "Résultat / PII",  pii: true,  ex: "Nom, date de naissance, crops du document" },
+  { key: "raw",        nm: "Documents bruts", pii: "sensitive", ex: "Photo, vidéo" },
+];
+
+/* The visibility rules (Data & visibilité tab) — verbatim, displayed as-is by the QA tool. */
+export const VISIBILITY_RULES = [
+  "ShareID voit tout. Business Admin voit tout sur son Business.",
+  "Groupe : voit la PII de ses Business PAR DÉFAUT ; chaque filiale peut la désactiver dans ses paramètres.",
+  "Retailer : data wall — agrégé + facturation uniquement, jamais la PII.",
+  "ShareID Sales : démo uniquement. Operator / Expert : seulement leurs requêtes assignées / escaladées.",
+];
 
 /* ----------------------------- helpers ----------------------------- */
 /* Raw matrix value for an action (true | false | "cond"). */
@@ -166,6 +208,23 @@ export function piiAccess(role, ctx = {}) {
   return { detail, raw };
 }
 
+/* Highest data level a role can reach, derived from its visibility row (never
+   hardcoded per role). Returns the most sensitive level the role can see plus a
+   `conditional` flag when that level is gated by a ◐ rule. Used by the QA tool to
+   answer "what data level does this role have?". */
+export function dataLevel(role) {
+  const lvl = (k) => DATA_LEVELS.find((d) => d.key === k);
+  const raw = visibility(role, "rawDocs");
+  const detail = visibility(role, "detailPII");
+  const requests = visibility(role, "requests");
+  const dash = visibility(role, "dashboard");
+  if (raw) return { ...lvl("raw"), conditional: raw === "cond" };
+  if (detail) return { ...lvl("result"), conditional: detail === "cond" };
+  if (requests) return { ...lvl("metadata"), conditional: requests === "cond" };
+  if (dash) return { ...lvl("billing"), nm: "Agrégé & facturation", conditional: dash === "cond" };
+  return { key: "none", nm: "Aucune donnée", pii: false, ex: "—", conditional: false };
+}
+
 /* Roles this actor may create (USER-CREATION RULE). */
 export function creatableRoles(role) {
   return CREATABLE[role] ? [...CREATABLE[role]] : [];
@@ -190,6 +249,7 @@ export const SECTION_ACCESS = {
   // Admin
   users:      (r) => creatableRoles(r).length > 0,
   business:   (r) => can(r, "configureBusiness"),
+  access:     (r) => r === "sid_admin", // Roles & permissions QA tool — ShareID Admin only
   settings:   () => true, // own preferences / API keys — available to all roles
 };
 export function canAccessSection(role, sectionId) {

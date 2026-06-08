@@ -15,7 +15,8 @@ import { RequestsHistory, OperatorQueue } from "./requests.jsx";
 import { ManageUsers, ProductDemo } from "./admin.jsx";
 import { BizList, BizWizard, BizEdit } from "./biz.jsx";
 import { DEFAULT_BIZ } from "./biz-steps.jsx";
-import { canAccessSection, can } from "./access.js";
+import { AccessQA } from "./qa.jsx";
+import { canAccessSection, can, ROLES } from "./access.js";
 import { useSession } from "./session.jsx";
 
 const LS_KEY = "shareid_studio_v1";
@@ -75,7 +76,7 @@ function Shell({ section, count, onNav, children }) {
     <div className="app">
       <div className="dash">
         <DashRail active={section} count={count} onNav={onNav} />
-        <div className="dash-main">{children}</div>
+        <div className="dash-main"><ViewAsBanner />{children}</div>
       </div>
     </div>);
 }
@@ -102,9 +103,26 @@ function Placeholder({ section }) {
 
 /* Section access order — used to pick a safe landing section for the active
    role (e.g. after switching org). Mirrors the rail order. */
-const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "users", "business", "settings"];
+const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "users", "business", "access", "settings"];
 function firstAllowedSection(role) {
   return SECTION_ORDER.find((s) => canAccessSection(role, s)) || "settings";
+}
+
+/* Sticky banner shown while impersonating a role via "View As". Self-contained
+   (reads the session), so it can be dropped into any layout and renders nothing
+   outside View As. Makes the read-only QA mode unmistakable and offers a one-click
+   exit. */
+function ViewAsBanner() {
+  const { isViewAs, role, setViewAs } = useSession();
+  if (!isViewAs) return null;
+  return (
+    <div className="viewas-banner">
+      <span className="vb-ico"><Ico name="eye" size={16} sw={1.9} /></span>
+      <span>Vue en tant que <span className="vb-role">{ROLES[role]?.nm || role}</span></span>
+      <span className="vb-ro">· lecture seule — aucune modification enregistrée</span>
+      <span className="vb-spacer" />
+      <button className="vb-exit" onClick={() => setViewAs(null)}><Ico name="x" size={13} sw={2.2} />Quitter la vue</button>
+    </div>);
 }
 
 /* Route-guard equivalent: shown when the active role may not reach a section.
@@ -126,7 +144,7 @@ function Denied({ role }) {
 
 function App() {
   const { useState, useEffect } = React;
-  const { role } = useSession();
+  const { role, readOnly, isViewAs, setViewAs } = useSession();
   const saved = (() => {try {return JSON.parse(localStorage.getItem(LS_KEY)) || {};} catch (e) {return {};}})();
   const [section, setSection] = useState(saved.section || "wf_builder"); // nav id
   const [view, setView] = useState(saved.view || "home"); // wf_builder: home | wizard | done
@@ -149,8 +167,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    // View As is a read-only QA mode: never persist anything while impersonating,
+    // so a previewed role can never mutate the real stored data. (Backstop — the
+    // mutators below are also guarded so the UI doesn't appear to accept edits.)
+    if (readOnly) return;
     try {localStorage.setItem(LS_KEY, JSON.stringify({ section, view, cfg, currentKey, workflows, businesses }));} catch (e) {}
-  }, [section, view, cfg, currentKey, workflows, businesses]);
+  }, [section, view, cfg, currentKey, workflows, businesses, readOnly]);
 
   /* When the active role changes (org switch) and the current section is no
      longer permitted, land on the first section this role can access. */
@@ -164,19 +186,26 @@ function App() {
     if (id === "wf_builder") setView("home");
   }
 
+  /* "View As" launcher: impersonate a role AND land on its first allowed section
+     (avoids a denied-flash when leaving the admin-only QA section). The sticky
+     banner's "Quitter la vue" exits impersonation (see ViewAsBanner). */
+  function startViewAs(r) { setViewAs(r); setSection(firstAllowedSection(r)); }
+
   /* business setup handlers */
   function bizStartNew() { setBizDraft({ ...DEFAULT_BIZ }); setBizView("wizard"); }
   function bizOpen(i) { setBizEditIdx(i); setBizView("edit"); }
   function bizFinish() {
+    if (readOnly) return;
     setBusinesses((b) => [...b, { ...bizDraft, name: bizDraft.name || "Business sans nom", conso: 0, modified: "à l'instant" }]);
     setBizView("list");
   }
   function bizSave(updated) {
+    if (readOnly) return;
     setBusinesses((b) => b.map((x, i) => i === bizEditIdx ? { ...updated, modified: "à l'instant" } : x));
     setBizView("list");
   }
 
-  const set = (patch) => setCfg((c) => ({ ...c, ...patch }));
+  const set = (patch) => { if (readOnly) return; setCfg((c) => ({ ...c, ...patch })); };
   const visibleKeys = STEPS.filter((s) => !s.cond || s.cond(cfg)).map((s) => s.key);
   const curIdx = visibleKeys.indexOf(currentKey);
 
@@ -206,11 +235,12 @@ function App() {
     setCurrentKey(visibleKeys[curIdx - 1]);
   }
   function finalize() {
+    if (readOnly) return;
     setWorkflows((w) => [...w, { ...cfg, name: cfg.name || "Workflow sans titre" }]);
     setView("done");
   }
-  /* Toggle Test↔Live is gated to roles that may do it (access model). */
-  function requestLive() {if (can(role, "toggleLive")) setLiveModal(true);}
+  /* Toggle Test↔Live is gated to roles that may do it (access model) and blocked in View As. */
+  function requestLive() {if (!readOnly && can(role, "toggleLive")) setLiveModal(true);}
   function confirmLive() {set({ mode: "live" });setLiveModal(false);}
 
   const ach = achievedLevel(cfg);
@@ -292,9 +322,9 @@ function App() {
 
   /* console + admin sections (rendered inside the shell) */
   if (section !== "wf_builder") {
-    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers }[section];
+    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers, access: AccessQA }[section];
     return <React.Fragment><Shell section={section} count={workflows.length} onNav={navTo}>
-      {Console ? <Console onNav={navTo} /> : <Placeholder section={section} />}
+      {Console ? <Console onNav={navTo} onViewAs={startViewAs} /> : <Placeholder section={section} />}
     </Shell></React.Fragment>;
   }
 
