@@ -1,7 +1,7 @@
 /* ShareID Studio — seed.js
    SOURCE DE VÉRITÉ du graphe de démo : les ORGANISATIONS (entités + hiérarchie)
    et les UTILISATEURS (un email = une org = un rôle ici). session.jsx et
-   admin.jsx en dérivent leurs seeds ; la vue Entreprise (org.jsx) affiche ce
+   admin.jsx en dérivent leurs seeds ; la vue Organisations (org.jsx) affiche ce
    graphe tel quel. AUCUNE donnée de requête/PII ici — c'est volontairement vide
    tant que la couche « requêtes » n'est pas implémentée.
 
@@ -101,11 +101,43 @@ export const USERS = [
   { id: "u_simon_atlas", name: "Simon Balducci", email: "simon@shareid.ai", org: "atlas", role: "agent",     status: "active", mfa: true, created: "2026-04-10", last: "à l'instant" },
 ];
 
+/* ----------------------------- parcours (workflows) ----------------------------- */
+/* SOURCE DE VÉRITÉ des workflows de démo. Un « parcours » = un workflow construit
+   dans le Workflow Builder puis rendu accessible (mode test ou live). Champs :
+   - `org`         : id de l'organisation propriétaire (scope des droits)
+   - `mode`        : "test" (non facturé) | "live" (facturé)
+   - `eidasTarget` : niveau de RISQUE interne (low|subst|high) — jamais « eIDAS » à l'écran
+   - `verifType`   : onboarding | authentication | extraction (cf. DEFAULT_CFG)
+   - `modified`    : libellé relatif d'affichage
+   Ces objets sont des cfg partielles : le builder les étale par-dessus DEFAULT_CFG
+   (openWorkflow), donc les champs supplémentaires (org/modified) sont inertes côté config. */
+export const SEED_WORKFLOWS = [
+  { id: "wf_atlas_onb",   name: "Onboarding KYC particuliers", org: "atlas",  mode: "live", eidasTarget: "high",  verifType: "onboarding",     modified: "il y a 2 h" },
+  { id: "wf_atlas_reauth",name: "Ré-authentification wallet",  org: "atlas",  mode: "test", eidasTarget: "subst", verifType: "authentication", modified: "hier" },
+  { id: "wf_volt_onb",    name: "Onboarding crypto renforcé",  org: "volt",   mode: "live", eidasTarget: "high",  verifType: "onboarding",     modified: "il y a 5 h" },
+  { id: "wf_previa_assu", name: "Vérification assuré",         org: "previa", mode: "test", eidasTarget: "subst", verifType: "onboarding",     modified: "il y a 3 j" },
+  { id: "wf_sgpart_compte",name: "Ouverture de compte",        org: "sgpart", mode: "live", eidasTarget: "high",  verifType: "onboarding",     modified: "il y a 1 j" },
+  { id: "wf_bourso_onb",  name: "Onboarding mobile",           org: "bourso", mode: "live", eidasTarget: "subst", verifType: "onboarding",     modified: "il y a 6 h" },
+  { id: "wf_cic_pro",     name: "KYC société (pro)",           org: "cic",    mode: "test", eidasTarget: "high",  verifType: "onboarding",     modified: "il y a 2 j" },
+  { id: "wf_origin_adh",  name: "Adhésion mutuelle",           org: "origin", mode: "live", eidasTarget: "low",   verifType: "extraction",     modified: "il y a 4 j" },
+  { id: "wf_bpsud_onb",   name: "Entrée en relation",          org: "bpsud",  mode: "test", eidasTarget: "subst", verifType: "onboarding",     modified: "il y a 7 h" },
+];
+
 /* ----------------------------- helpers ----------------------------- */
 export function orgById(id) { return ORGS.find((o) => o.id === id) || null; }
 export function usersOf(orgId) { return USERS.filter((u) => u.org === orgId); }
 export function childrenOf(orgId) { return ORGS.filter((o) => o.parent === orgId); }
 export function ownerOf(orgId) { return USERS.find((u) => u.org === orgId && u.owner) || null; }
+
+/* Périmètre d'organisations visible par une session (rôle + org active) :
+   - ShareID (sid_admin / sid_sales) → null = TOUTES les orgs clientes
+   - groupe / retailer → son org + ses entités rattachées (filiales / business revendus)
+   - business → lui-même uniquement
+   Renvoie un tableau d'ids, ou null pour « tout voir ». (Doublé SERVER-SIDE en prod.) */
+export function visibleOrgIds(role, activeOrgId) {
+  if (role === "sid_admin" || role === "sid_sales") return null;
+  return [activeOrgId, ...childrenOf(activeOrgId).map((o) => o.id)];
+}
 
 /* Noms des business qu'une org « touche » — sert au libellé « business
    accessibles » et, plus tard, au scope des requêtes (SERVER-SIDE REQUIRED) :
@@ -123,7 +155,7 @@ export function orgBusinesses(org) {
 
 /* Descripteurs business pour le Business Setup (8 entités business, hors pôle
    partenaire). Spread par-dessus DEFAULT_BIZ dans App.jsx → source unique avec
-   la vue Entreprise. owner/agents dérivent des USERS de l'org. */
+   la vue Organisations. owner/agents dérivent des USERS de l'org. */
 export const SEED_BUSINESSES = ORGS
   .filter((o) => o.entity === "business" && o.id !== "antifraude")
   .map((o) => {

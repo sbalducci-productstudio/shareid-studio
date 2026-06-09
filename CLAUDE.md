@@ -19,17 +19,21 @@ donnée est mockée / en `localStorage`. Voir la **frontière d'enforcement** pl
 d'accès sont appliquées côté UI uniquement et **devront être doublées côté backend** pour être une
 vraie barrière de sécurité.
 
-⚠️ **Vocabulaire — règle stricte** : l'UI dit toujours « **niveau de risque** » (Faible / Moyen /
-Élevé), **jamais « eIDAS »** côté utilisateur. Le mapping eIDAS (low / substantial / high) reste
-**interne** (`core.jsx`, `EidasTag`). Ne jamais exposer « eIDAS » dans une chaîne visible.
+⚠️ **Vocabulaire — règles strictes** :
+- L'UI dit toujours « **niveau de risque** » (Faible / Moyen / Élevé), **jamais « eIDAS »** côté
+  utilisateur. Le mapping eIDAS (low / substantial / high) reste **interne** (`core.jsx`, `EidasTag`).
+- On dit toujours « **organisation** », **jamais « entreprise »**. Le **type d'organisation** a
+  3 valeurs : **business · groupe · retailer** (ShareID = la plateforme, pas un type d'org cliente →
+  exclue de la vue Organisations). Un **parcours** = un workflow rendu accessible (test / live).
 
 ## Périmètre fonctionnel (4 grands blocs)
 
 | Bloc | Quoi | Fichiers |
 |------|------|----------|
 | **Workflow Builder** | Wizard 11 étapes : config → type → document → face → reauth → signature → scope → advanced → result → preview → integration. Génère un workflow + QR de test, bascule Test↔Live. | `App.jsx`, `steps1.jsx`, `steps2.jsx`, `core.jsx` |
-| **Business Setup** | Création (wizard) & édition (one-pager) d'un Business : scope, branding, cible de risque. Normalise les business legacy. | `biz.jsx`, `biz-steps.jsx` |
+| **Configuration d'organisation** | Création (wizard) & édition (one-pager) d'une organisation : scope, branding, cible de risque. Normalise les orgs legacy. | `biz.jsx`, `biz-steps.jsx` |
 | **Console / Données / Requêtes** | Dashboard & stats, historique des requêtes, file de l'opérateur (revue humaine), démos produit. | `console.jsx`, `requests.jsx`, `charts.jsx`, `admin.jsx` |
+| **Navigation (Build / Admin)** | **Build** = construire : Workflow builder · Configuration d'organisation · Créer un utilisateur. **Admin** = consulter (scopé par droits) : Utilisateurs · Organisations · Parcours · Contrôle des accès · Paramètres (= paramètres d'org). Dropdown compte = paramètres utilisateur + déconnexion. | `App.jsx`, `steps1.jsx` (`DashRail`), `access.js` (`SECTION_ACCESS`) |
 | **Rôles & permissions** | Couche d'accès complète : 4 entités, 8 rôles, matrice d'actions, visibilité données/PII, multi-org, ownership. Outil QA « View As ». | `access.js`, `session.jsx`, `selectors.js`, `qa.jsx` |
 
 ## Modèle d'accès (le cœur du projet)
@@ -69,14 +73,17 @@ fois pour que les deux couches partagent la même matrice.
 | `App.jsx` | Shell : état, navigation multi-sections, rail, modales, guards, persistance |
 | `core.jsx` | Constantes domaine (niveaux de risque, types, méthodes capture, étapes), helpers eIDAS, icônes |
 | `steps1.jsx` / `steps2.jsx` | Les 11 étapes du Workflow Builder |
-| `biz.jsx` / `biz-steps.jsx` | Business Setup (liste, wizard, édition) |
+| `biz.jsx` / `biz-steps.jsx` | Configuration d'organisation (liste, wizard, édition) — anciennement « Business Setup » |
 | `console.jsx` / `charts.jsx` | Dashboard & stats |
 | `requests.jsx` | Historique requêtes + file opérateur |
-| `admin.jsx` | Gestion users + démos produit |
-| `access.js` ⭐ | **SSoT** du modèle d'accès (entités, rôles, matrices, helpers) |
+| `admin.jsx` | Vue Utilisateurs + vue Parcours (workflows) + écran « Créer un utilisateur » (Build) + démos produit |
+| `org.jsx` | Vue Organisations (annuaire des orgs clientes, scopé par rôle) + fiche d'org |
+| `datatable.jsx` | Tableau partagé (recherche, tri, filtres/colonne, pagination) — utilisé par Utilisateurs / Organisations / Parcours |
+| `access.js` ⭐ | **SSoT** du modèle d'accès (entités, rôles, matrices, helpers, `SECTION_ACCESS`) |
 | `selectors.js` | Sélecteur de redaction PII (dérive d'`access.js`) |
+| `seed.js` | SSoT graphe démo : `ORGS`, `USERS`, `SEED_BUSINESSES`, `SEED_WORKFLOWS`, helpers (`visibleOrgIds`) |
 | `session.jsx` | Contexte session : rôle/org actifs, View As, lecture seule |
-| `qa.jsx` | Outil QA rôles & permissions (matrices + View As) |
+| `qa.jsx` | Outil QA rôles & permissions (matrices + View As) — section « Contrôle des accès » |
 
 ## Commandes
 
@@ -107,10 +114,23 @@ npm run test:watch
 
 ## Status — au 2026-06-09
 
-**État : sain et stable.** Repo clean, tout pushé sur `main`, déployé.
+**État : sain et stable.** 112 tests verts, build OK (~99 kB gzip).
 
-- ✅ **112 tests** passent (vitest) — 103 sur `access.js`, 9 sur `selectors.js`.
-- ✅ Build prod OK (~98 kB gzip).
+**Dernier travail (9 juin, 2e session)** : **uniformisation vocabulaire + restructuration navigation.**
+- Vocab : « Entreprise » → « **Organisation** » partout en UI ; type d'org = business/groupe/retailer ;
+  « parcours » = workflow accessible. Règle ajoutée plus haut.
+- **Tableau partagé `datatable.jsx`** (recherche, **tri par colonne**, filtres par colonne texte/multi-select,
+  perso des colonnes, pagination) → utilisé par **Utilisateurs**, **Organisations** et **Parcours**.
+- Nav : **Build** = Workflow builder · Configuration d'organisation · **Créer un utilisateur** (nouveau).
+  **Admin** = Utilisateurs · **Organisations** (scopée par rôle, ShareID exclu de la liste) ·
+  **Parcours** (nouveau, liste des workflows test/live, scopée) · Contrôle des accès · Paramètres (= org).
+- **`SEED_WORKFLOWS`** ajouté à `seed.js` (9 parcours seedés par org, test/live, niveau de risque) ;
+  `App.jsx` rattache `org.id` aux workflows créés. **LS_KEY bumpé `…_v3`** (état propre).
+- Dropdown compte : ajout paramètres utilisateur + **déconnexion** (reset démo, pas d'écran login).
+- `SECTION_ACCESS` étendu (`parcours`, `user_create`) ; `settings` re-gated = admins d'org seulement.
+
+- ✅ **112 tests** passent (vitest) — 103 sur `access.js`, 9 sur `selectors.js`. `access.js` matrice non touchée.
+- ✅ Build prod OK (~99 kB gzip).
 - ✅ Couche d'accès complète et fidèle au Sheet (entités, 8 rôles, actions, visibilité, multi-org, ownership).
 - ✅ Workflow Builder, Business Setup (création + édition + normalisation legacy), Console, Requêtes, outil QA View As : tous opérationnels.
 - ✅ **Design system unifié** : un seul fichier de tokens (`public/ds/colors_and_type.css`) est la source unique. `studio.css` / `studio-views.css` ne contiennent plus de `:root` parallèle ni de hex en dur (hors `#fff`/`#000` = blanc/noir marque, et ombres `rgba`). Palette étendue documentée (neutres, ambre, accents rôles) ; ramps de statut **dérivés des primitives marque** par `color-mix` (rien d'inventé). Contraste texte vérifié ≥ 4.5:1 (WCAG AA).

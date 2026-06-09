@@ -25,7 +25,7 @@ export const ENTITIES = {
   },
   business: {
     id: "business", nm: "Business",
-    d: "Unité de base (une entreprise). Variantes : standard · operator-only.",
+    d: "Unité de base (une organisation). Variantes : standard · operator-only.",
     variants: ["standard", "operator_only"],
     hosts: ["biz_admin", "agent", "operator", "expert"],
   },
@@ -244,13 +244,15 @@ export const SECTION_ACCESS = {
   operator:   (r) => can(r, "humanReview"),
   demo:       (r) => can(r, "demos"),
   // Build
-  wf_builder: (r) => can(r, "buildWorkflows"),
-  biz_setup:  (r) => can(r, "configureBusiness") || can(r, "createBizGroup"),
+  wf_builder:  (r) => can(r, "buildWorkflows"),
+  biz_setup:   (r) => can(r, "configureBusiness") || can(r, "createBizGroup"),
+  user_create: (r) => creatableRoles(r).length > 0, // créer un utilisateur = même droit que la gestion
   // Admin
   users:      (r) => creatableRoles(r).length > 0,
   business:   (r) => can(r, "configureBusiness"),
+  parcours:   (r) => can(r, "buildWorkflows") || can(r, "configureBusiness") || visibility(r, "requests") !== false, // voir les parcours accessibles
   access:     (r) => r === "sid_admin", // Roles & permissions QA tool — ShareID Admin only
-  settings:   () => true, // own preferences / API keys — available to all roles
+  settings:   (r) => can(r, "configureBusiness") || can(r, "createBizGroup"), // paramètres de l'organisation
 };
 export function canAccessSection(role, sectionId) {
   const pred = SECTION_ACCESS[sectionId];

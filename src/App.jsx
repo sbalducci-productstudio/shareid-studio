@@ -12,21 +12,21 @@ import {
 } from "./steps2.jsx";
 import { ConsoleHome, ConsoleStats } from "./console.jsx";
 import { RequestsHistory, OperatorQueue } from "./requests.jsx";
-import { ManageUsers, ProductDemo } from "./admin.jsx";
+import { ManageUsers, ProductDemo, ParcoursView, UserCreate } from "./admin.jsx";
 import { BizList, BizWizard, BizEdit } from "./biz.jsx";
 import { DEFAULT_BIZ } from "./biz-steps.jsx";
 import { AccessQA } from "./qa.jsx";
 import { CompanyView } from "./org.jsx";
-import { SEED_BUSINESSES } from "./seed.js";
+import { SEED_BUSINESSES, SEED_WORKFLOWS } from "./seed.js";
 import { canAccessSection, can, ROLES } from "./access.js";
 import { useSession } from "./session.jsx";
 
-// v2 : repart d'un état propre (nouveau seed orgs/users, business amorcés).
-const LS_KEY = "shareid_studio_v2";
+// v3 : repart d'un état propre (seed orgs/users + business + workflows amorcés).
+const LS_KEY = "shareid_studio_v3";
 
-/* Business amorcés depuis le seed (source unique avec la vue Entreprise) :
-   chaque descripteur est étalé par-dessus DEFAULT_BIZ pour devenir un business
-   complet et éditable dans Business Setup. */
+/* Organisations amorcées depuis le seed (source unique avec la vue Organisations) :
+   chaque descripteur est étalé par-dessus DEFAULT_BIZ pour devenir une organisation
+   complète et éditable dans Configuration d'organisation. */
 const SEEDED_BUSINESSES = SEED_BUSINESSES.map((b) => ({ ...DEFAULT_BIZ, ...b }));
 
 /* Thème par défaut (anciennement piloté par le Tweaks panel du canvas Claude Design). */
@@ -91,9 +91,7 @@ function Shell({ section, count, onNav, children }) {
 
 function Placeholder({ section }) {
   const meta = {
-    users: { icon: "users", t: "Utilisateurs", d: "Gestion des utilisateurs du business : rôles, invitations, magic-links et logs de connexion." },
-    business: { icon: "building", t: "Entreprise", d: "Paramètres de l'organisation et de la hiérarchie business." },
-    settings: { icon: "settings", t: "Paramètres", d: "Préférences du Studio, clés API et intégrations." },
+    settings: { icon: "settings", t: "Paramètres", d: "Paramètres de l'organisation : identité, branding, clés API et intégrations." },
   }[section] || { icon: "info", t: "Bientôt", d: "" };
   return (
     <React.Fragment>
@@ -111,7 +109,7 @@ function Placeholder({ section }) {
 
 /* Section access order — used to pick a safe landing section for the active
    role (e.g. after switching org). Mirrors the rail order. */
-const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "users", "business", "access", "settings"];
+const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "user_create", "users", "business", "parcours", "access", "settings"];
 function firstAllowedSection(role) {
   return SECTION_ORDER.find((s) => canAccessSection(role, s)) || "settings";
 }
@@ -152,13 +150,13 @@ function Denied({ role }) {
 
 function App() {
   const { useState, useEffect } = React;
-  const { role, readOnly, isViewAs, setViewAs } = useSession();
+  const { role, org, readOnly, isViewAs, setViewAs } = useSession();
   const saved = (() => {try {return JSON.parse(localStorage.getItem(LS_KEY)) || {};} catch (e) {return {};}})();
   const [section, setSection] = useState(saved.section || "wf_builder"); // nav id
   const [view, setView] = useState(saved.view || "home"); // wf_builder: home | wizard | done
   const [cfg, setCfg] = useState(saved.cfg || { ...DEFAULT_CFG });
   const [currentKey, setCurrentKey] = useState(saved.currentKey || "config");
-  const [workflows, setWorkflows] = useState(saved.workflows || []);
+  const [workflows, setWorkflows] = useState(() => (saved.workflows && saved.workflows.length) ? saved.workflows : SEED_WORKFLOWS);
   const [businesses, setBusinesses] = useState(() => (saved.businesses && saved.businesses.length) ? saved.businesses : SEEDED_BUSINESSES);
   const [bizView, setBizView] = useState("list"); // list | wizard | edit
   const [bizDraft, setBizDraft] = useState(() => ({ ...DEFAULT_BIZ }));
@@ -244,7 +242,9 @@ function App() {
   }
   function finalize() {
     if (readOnly) return;
-    setWorkflows((w) => [...w, { ...cfg, name: cfg.name || "Workflow sans titre" }]);
+    /* Un workflow rendu accessible est rattaché à l'org active : c'est ce lien qui
+       le fait apparaître dans la vue Parcours (Admin), scopée par organisation. */
+    setWorkflows((w) => [...w, { ...cfg, id: "wf_" + Date.now(), name: cfg.name || "Workflow sans titre", org: org.id, mode: cfg.mode || "test", modified: "à l'instant" }]);
     setView("done");
   }
   /* Toggle Test↔Live is gated to roles that may do it (access model) and blocked in View As. */
@@ -330,9 +330,9 @@ function App() {
 
   /* console + admin sections (rendered inside the shell) */
   if (section !== "wf_builder") {
-    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers, business: CompanyView, access: AccessQA }[section];
+    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers, business: CompanyView, parcours: ParcoursView, user_create: UserCreate, access: AccessQA }[section];
     return <React.Fragment><Shell section={section} count={workflows.length} onNav={navTo}>
-      {Console ? <Console onNav={navTo} onViewAs={startViewAs} /> : <Placeholder section={section} />}
+      {Console ? <Console onNav={navTo} onViewAs={startViewAs} workflows={workflows} /> : <Placeholder section={section} />}
     </Shell></React.Fragment>;
   }
 
@@ -388,7 +388,7 @@ function App() {
             <h3>Passer ce workflow en Live ?</h3>
             <p>La facturation démarre pour ce business et le mode live est activé. Vos requêtes de test restent séparées.</p>
             <div className="mlist">
-              <div><Ico name="check" size={15} sw={2.2} />La facturation démarre pour votre entreprise</div>
+              <div><Ico name="check" size={15} sw={2.2} />La facturation démarre pour votre organisation</div>
               <div><Ico name="check" size={15} sw={2.2} />Le business passe en live (premier workflow live)</div>
               <div><Ico name="check" size={15} sw={2.2} />Les requêtes de test restent isolées</div>
             </div>

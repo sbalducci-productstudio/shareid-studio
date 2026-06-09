@@ -28,14 +28,16 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
       label: "Build",
       items: [
         { id: "wf_builder", nm: "Workflow builder", icon: "layers", badge: count || null },
-        { id: "biz_setup", nm: "Business setup", icon: "globe" },
+        { id: "biz_setup", nm: "Configuration d'organisation", icon: "globe" },
+        { id: "user_create", nm: "Créer un utilisateur", icon: "userCheck" },
       ],
     },
     {
       label: "Admin",
       items: [
         { id: "users", nm: "Utilisateurs", icon: "users" },
-        { id: "business", nm: "Entreprise", icon: "building" },
+        { id: "business", nm: "Organisations", icon: "building" },
+        { id: "parcours", nm: "Parcours", icon: "fileCheck" },
         { id: "access", nm: "Contrôle des accès", icon: "shieldAlert" },
         { id: "settings", nm: "Paramètres", icon: "settings" },
       ],
@@ -79,6 +81,13 @@ function AccountSwitcher({ onNav }) {
   const initials = user.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   // Qui peut créer une organisation (cf. modèle d'accès) — sinon on cache l'action.
   const canCreate = can(role, "createBizGroup") || can(role, "configureBusiness");
+  /* Déconnexion — prototype sans écran de login : on réinitialise l'état de démo
+     local et on recharge (retour à l'état seedé propre). Réversible (reseed). */
+  function logout() {
+    if (!window.confirm("Se déconnecter ? L'état de démo local sera réinitialisé.")) return;
+    try { localStorage.removeItem("shareid_studio_v3"); localStorage.removeItem("shareid_session_v2"); } catch (e) {}
+    window.location.reload();
+  }
   return (
     <div className="dash-account top" style={{ position: "relative" }}>
       {open && (
@@ -113,6 +122,17 @@ function AccountSwitcher({ onNav }) {
               </button>
             </React.Fragment>
           )}
+          {/* Paramètres du compte (transverses à toutes les orgs) + déconnexion.
+             Les paramètres d'ORGANISATION vivent dans Admin › Paramètres, pas ici. */}
+          <div className="combo-div" />
+          <button className="org-opt" onClick={() => setOpen(false)}>
+            <span className="org-opt-mk"><Ico name="settings" size={15} sw={1.9} /></span>
+            <span className="org-opt-id"><span className="org-opt-nm">Paramètres du compte</span><span className="org-opt-sub">Nom, prénom, email</span></span>
+          </button>
+          <button className="org-opt logout" onClick={logout}>
+            <span className="org-opt-mk"><Ico name="logout" size={15} sw={1.9} /></span>
+            <span className="org-opt-id"><span className="org-opt-nm">Se déconnecter</span></span>
+          </button>
         </div>
       )}
       <button className="dash-biz" onClick={() => setOpen((v) => !v)}>

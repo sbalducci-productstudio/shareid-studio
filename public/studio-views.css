@@ -512,6 +512,56 @@ button.bill-mode.sel:hover{ border-color:var(--color-main); }
 .req-foot-hint{ display:flex; align-items:center; gap:7px; padding:11px 14px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
 .req-foot-hint svg{ color:var(--muted-soft); flex:none; }
 
+/* ----------------------------- Utilisateurs (admin.jsx) ----------------------------- */
+/* Barre d'outils : recherche proéminente (largeur fluide → texte intégral lisible). */
+.users-toolbar{ justify-content:space-between; }
+.users-search{ flex:1; min-width:240px; max-width:520px; }
+.users-search .inp.with-icon{ padding:11px 38px 11px 38px; font-size:14px; }
+.inp-clear{ position:absolute; right:8px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:24px; height:24px; border:0; border-radius:7px; background:none; color:var(--muted-soft); cursor:pointer; }
+.inp-clear:hover{ background:var(--panel); color:var(--ink); }
+
+/* Récap des filtres actifs : hiérarchise l'info de recherche au-dessus de la table. */
+.active-filters{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:10px; }
+.af-chip{ display:inline-flex; align-items:center; gap:6px; padding:4px 6px 4px 10px; border-radius:8px; background:var(--info-bg); color:var(--color-main); font:500 12px var(--font-sans); }
+.af-chip button{ display:grid; place-items:center; width:17px; height:17px; border:0; border-radius:5px; background:none; color:inherit; cursor:pointer; opacity:.7; }
+.af-chip button:hover{ opacity:1; background:color-mix(in srgb,var(--color-main) 14%,transparent); }
+.af-clear{ border:0; background:none; color:var(--muted); font:500 12px var(--font-sans); cursor:pointer; text-decoration:underline; padding:4px 6px; }
+.af-clear:hover{ color:var(--ink); }
+
+/* Filtres par colonne : entonnoir dans l'en-tête + popover (réutilise .combo-pop). */
+.th-head{ display:inline-flex; align-items:center; gap:6px; position:relative; }
+.th-filter{ display:inline-flex; align-items:center; gap:3px; padding:3px; border:0; border-radius:6px; background:none; color:var(--muted-soft); cursor:pointer; transition:120ms; }
+.th-filter:hover{ background:var(--panel); color:var(--ink); }
+.th-filter.on{ color:var(--color-main); background:var(--info-bg); }
+.th-filter-n{ font-size:10px; font-weight:700; line-height:1; }
+.wf-table th.th-filtered{ color:var(--color-main); }
+.combo-pop.th-pop{ left:0; right:auto; min-width:200px; max-height:280px; overflow-y:auto; text-transform:none; letter-spacing:0; }
+.combo-pop.th-pop .combo-opt{ font-weight:400; }
+.th-pop-text{ padding:3px; }
+.th-pop-text .inp.sm{ width:100%; }
+.th-reset{ color:var(--muted); justify-content:center; margin-top:2px; border-top:1px solid var(--line); border-radius:0; }
+.th-reset:hover{ color:var(--ink); }
+/* La table users laisse déborder les popovers d'en-tête (pas de clip du scroll). */
+.users-table-wrap, .users-table-wrap .wf-table-scroll{ overflow:visible; }
+
+/* Pied de table : comptage + taille de page + pagination. */
+.table-foot{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:10px 14px; border-top:1px solid var(--line); flex-wrap:wrap; }
+.foot-count{ font-size:12.5px; color:var(--muted); font-weight:500; }
+.foot-pager{ display:flex; align-items:center; gap:8px; }
+.foot-select{ font:500 12.5px var(--font-sans); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:5px 8px; background:#fff; cursor:pointer; }
+.foot-pages{ font-size:12.5px; color:var(--muted); font-weight:500; min-width:74px; text-align:center; }
+.page-btn{ display:grid; place-items:center; width:30px; height:30px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); cursor:pointer; transition:120ms; }
+.page-btn:hover:not(:disabled){ border-color:var(--line-strong); }
+.page-btn:disabled{ color:var(--muted-soft); cursor:default; opacity:.5; }
+/* Tri par colonne : le libellé devient un bouton, l'entonnoir reste à part. */
+.th-sort{ display:inline-flex; align-items:center; gap:3px; border:0; background:none; padding:0; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+.th-sort:hover{ color:var(--ink); }
+.th-sort.on{ color:var(--color-main); }
+/* Petit logo d'org dans une cellule de table (aligné sur .req-ava). */
+.org-mark.sm{ width:28px; height:28px; border-radius:8px; font-size:10.5px; }
+/* Note domaine dans la fiche d'org (drawer) : carte autonome, pas de bord supérieur. */
+.drawer-body .org-note{ border-top:0; border-radius:10px; }
+
 /* ----------------------------- Entreprise (org.jsx) ----------------------------- */
 /* Arborescence des organisations : sections par famille d'entité, cartes d'org
    dépliables, équipes. Réutilise les tokens DS (lignes, rayons, statut, rôles). */
