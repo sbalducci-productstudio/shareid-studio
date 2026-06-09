@@ -4,8 +4,9 @@ import {
   Ico, DRIVERS, VERIF_TYPES, AUTH_SOURCES, SIGNATURE_LEVELS, CAPTURE_METHODS, captureLabel,
   FACE_PRESETS, LEVELS, LEVEL_KEYS, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
-import { canAccessSection, can, ROLES, ROLE_KEYS } from "./access.js";
+import { canAccessSection, firstAllowedSection, can, ROLES } from "./access.js";
 import { useSession } from "./session.jsx";
+import { USERS, ORGS } from "./seed.js";
 
 /* Libellé court du type de vérification d'un workflow (cartes / tableau). */
 function verifLabel(w) { return { onboarding: "Onboarding (IDV)", authentication: "Authentification", extraction: "Extraction de données" }[w.verifType] || "Onboarding (IDV)"; }
@@ -65,8 +66,8 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
           </div>
         ))}
       </nav>
-      {/* View As : outil d'observation réservé au ShareID Admin, en bas, à part. */}
-      <ViewAsSwitcher />
+      {/* View As : se connecter en tant que n'importe quel utilisateur (QA), en bas. */}
+      <ViewAsSwitcher active={active} onNav={onNav} />
     </aside>
   );
 }
@@ -143,39 +144,92 @@ function AccountSwitcher({ onNav }) {
     </div>
   );
 }
-/* View As — sélecteur d'observation réservé au ShareID Admin (en bas du rail).
-   Feature distincte du multi-org : ici on ne change pas d'org, on REND le Studio
-   comme un autre rôle le verrait (lecture seule). Le rôle réel reste ShareID
-   Admin ; quitter l'observation revient à la vue admin. La redirection vers une
-   section accessible est gérée par l'effet de garde dans App.jsx. */
-function ViewAsSwitcher() {
-  const { realRole, role, isViewAs, viewAsRole, setViewAs } = useSession();
+/* View As — sélecteur d'observation (en bas du rail). EXCEPTIONNEL pour le
+   prototype : on se connecte EN TANT QUE n'importe quel utilisateur du seed et on
+   voit EXACTEMENT ce qu'il voit (identité + organisation + rôle, donc sections +
+   donnée). Outil de QA produit : il reste TOUJOURS visible, quel que soit le rôle
+   observé, pour pouvoir cueillir tous les utilisateurs et revenir à son compte.
+   Lecture seule (jamais persisté). La redirection vers une section accessible est
+   gérée par l'effet de garde dans App.jsx. */
+function viewAvatar(nm) { return (nm || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
+function ViewAsSwitcher({ active, onNav }) {
+  const { viewAsId, viewAsUser, isViewAs, setViewAs } = useSession();
   const [open, setOpen] = React.useState(false);
-  if (realRole !== "sid_admin") return null; // outil admin uniquement
+  const [q, setQ] = React.useState("");
+
+  // Tous les utilisateurs du seed, groupés par organisation (ordre des ORGS),
+  // filtrés par la recherche (nom / email / rôle / organisation).
+  const needle = q.trim().toLowerCase();
+  const groups = ORGS
+    .map((o) => ({
+      org: o,
+      users: USERS.filter((u) => u.org === o.id).filter((u) => {
+        if (!needle) return true;
+        const hay = (u.name + " " + u.email + " " + (ROLES[u.role]?.nm || "") + " " + o.nm).toLowerCase();
+        return hay.includes(needle);
+      }),
+    }))
+    .filter((g) => g.users.length > 0);
+
+  /* Impersonate (or exit) and land on a section the target role can reach — évite
+     le flash « Accès refusé » si la section courante ne lui est pas accessible.
+     L'effet de garde d'App.jsx reste le filet de sécurité. */
+  function pick(userId) {
+    setViewAs(userId);
+    setOpen(false);
+    setQ("");
+    const u = userId ? USERS.find((x) => x.id === userId) : null;
+    const role = u ? u.role : "sid_admin"; // revenir au compte réel = ShareID Admin
+    if (onNav && !canAccessSection(role, active)) onNav(firstAllowedSection(role));
+  }
+
   return (
     <div className="dash-viewas" style={{ position: "relative" }}>
       {open && (
-        <div className="combo-pop" style={{ top: "auto", bottom: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 300, overflowY: "auto" }}>
-          <div className="nav-group-l" style={{ padding: "4px 10px" }}>Observer en tant que…</div>
+        <div className="combo-pop org-pop" style={{ top: "auto", bottom: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 460, display: "flex", flexDirection: "column" }}>
+          <div className="nav-group-l" style={{ padding: "4px 8px 2px" }}>Se connecter en tant que…</div>
+          {/* Revenir à mon compte réel (toujours dispo en observation) */}
           {isViewAs && (
-            <button className="combo-opt" style={{ gap: 8 }} onClick={() => { setViewAs(null); setOpen(false); }}>
-              <span className="mark sq"><Ico name="x" size={10} sw={3} /></span>
-              <span style={{ fontSize: 12.5 }}>Quitter l'observation</span>
+            <button className="org-opt" onClick={() => pick(null)}>
+              <span className="org-opt-mk"><Ico name="back" size={14} sw={2} /></span>
+              <span className="org-opt-id"><span className="org-opt-nm">Revenir à mon compte</span><span className="org-opt-sub">Simon Balducci · ShareID Admin</span></span>
             </button>
           )}
-          {ROLE_KEYS.map((r) => (
-            <button key={r} className="combo-opt" style={{ gap: 8 }} onClick={() => { setViewAs(r); setOpen(false); }}>
-              <span className={"mark sq"} style={viewAsRole === r ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}>
-                <Ico name="check" size={11} sw={3} style={{ opacity: viewAsRole === r ? 1 : 0 }} />
-              </span>
-              <span style={{ fontSize: 12.5 }}>{ROLES[r].nm}</span>
-            </button>
-          ))}
+          <div className="va-search">
+            <Ico name="search" size={14} sw={1.9} />
+            <input className="va-search-inp" autoFocus value={q} placeholder="Rechercher un utilisateur…" onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div className="va-list">
+            {groups.length === 0 && <div className="va-empty">Aucun utilisateur</div>}
+            {groups.map((g) => (
+              <div className="va-grp" key={g.org.id}>
+                <div className="nav-group-l" style={{ padding: "6px 8px 3px" }}>{g.org.nm}</div>
+                {g.users.map((u) => {
+                  const on = viewAsId === u.id;
+                  const meta = ROLES[u.role];
+                  return (
+                    <button key={u.id} className={"org-opt" + (on ? " on" : "")} onClick={() => pick(u.id)}>
+                      <span className="org-opt-mk">{viewAvatar(u.name)}</span>
+                      <span className="org-opt-id">
+                        <span className="org-opt-nm">{u.name}{u.owner ? " · owner" : ""}</span>
+                        <span className="org-opt-sub mono">{u.email}</span>
+                      </span>
+                      <span className={"role-tag " + meta.cls} style={{ fontSize: 9.5, padding: "1px 6px", flex: "none" }}>{meta.nm}</span>
+                      {on && <Ico name="check" size={15} sw={2.4} />}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       <button className={"dash-viewas-btn" + (isViewAs ? " on" : "")} onClick={() => setOpen((v) => !v)}>
         <Ico name="eye" size={15} sw={1.8} />
-        <span className="va-info"><span className="va-lab">View As</span><span className="va-sub">{isViewAs ? ROLES[role].nm : "Observer un rôle"}</span></span>
+        <span className="va-info">
+          <span className="va-lab">View As</span>
+          <span className="va-sub">{isViewAs ? viewAsUser.name : "Se connecter en tant que…"}</span>
+        </span>
         <Ico name="chevUp" size={14} sw={1.8} />
       </button>
     </div>

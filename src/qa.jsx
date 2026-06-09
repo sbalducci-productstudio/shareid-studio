@@ -19,6 +19,11 @@ import {
   DATA_LEVELS, VISIBILITY_RULES, dataLevel, isConditional,
 } from "./access.js";
 import { useSession } from "./session.jsx";
+import { USERS } from "./seed.js";
+
+/* Un utilisateur représentatif du seed pour un rôle donné — permet à la « View
+   As » du tool QA d'observer un rôle via un vrai utilisateur (avec son org). */
+const repUserId = (role) => (USERS.find((u) => u.role === role) || {}).id || null;
 
 /* A single ✔ / — / ◐ cell, driven by the raw matrix value (true | false | "cond"). */
 function Mark({ v }) {
@@ -84,7 +89,7 @@ export function AccessQA({ onViewAs }) {
                         {allowed} action{allowed > 1 ? "s" : ""} autorisée{allowed > 1 ? "s" : ""}
                         {cond > 0 ? ` · dont ${cond} ◐` : ""}
                       </div>
-                      <button className="sid-btn outline" style={{ justifyContent: "center" }} onClick={() => onViewAs(role)}>
+                      <button className="sid-btn outline" style={{ justifyContent: "center" }} onClick={() => onViewAs(repUserId(role))}>
                         <Ico name="eye" size={14} sw={1.9} />Voir en tant que ce rôle
                       </button>
                     </div>);

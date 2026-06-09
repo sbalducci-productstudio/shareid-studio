@@ -258,3 +258,10 @@ export function canAccessSection(role, sectionId) {
   const pred = SECTION_ACCESS[sectionId];
   return pred ? pred(role) : false;
 }
+
+/* Rail order — used to pick a safe landing section for a role (e.g. after an org
+   switch or a View As). Mirrors the rail order in DashRail. */
+export const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "user_create", "users", "business", "parcours", "access", "settings"];
+export function firstAllowedSection(role) {
+  return SECTION_ORDER.find((s) => canAccessSection(role, s)) || "settings";
+}

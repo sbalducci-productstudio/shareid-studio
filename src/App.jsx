@@ -17,8 +17,8 @@ import { BizList, BizWizard, BizEdit } from "./biz.jsx";
 import { DEFAULT_BIZ } from "./biz-steps.jsx";
 import { AccessQA } from "./qa.jsx";
 import { CompanyView } from "./org.jsx";
-import { SEED_BUSINESSES, SEED_WORKFLOWS } from "./seed.js";
-import { canAccessSection, can, ROLES } from "./access.js";
+import { SEED_BUSINESSES, SEED_WORKFLOWS, USERS } from "./seed.js";
+import { canAccessSection, firstAllowedSection, can, ROLES } from "./access.js";
 import { useSession } from "./session.jsx";
 
 // v3 : repart d'un état propre (seed orgs/users + business + workflows amorcés).
@@ -107,27 +107,20 @@ function Placeholder({ section }) {
     </React.Fragment>);
 }
 
-/* Section access order — used to pick a safe landing section for the active
-   role (e.g. after switching org). Mirrors the rail order. */
-const SECTION_ORDER = ["home", "stats", "requests", "operator", "demo", "wf_builder", "biz_setup", "user_create", "users", "business", "parcours", "access", "settings"];
-function firstAllowedSection(role) {
-  return SECTION_ORDER.find((s) => canAccessSection(role, s)) || "settings";
-}
-
 /* Sticky banner shown while impersonating a role via "View As". Self-contained
    (reads the session), so it can be dropped into any layout and renders nothing
    outside View As. Makes the read-only QA mode unmistakable and offers a one-click
    exit. */
 function ViewAsBanner() {
-  const { isViewAs, role, setViewAs } = useSession();
+  const { isViewAs, role, viewAsUser, setViewAs } = useSession();
   if (!isViewAs) return null;
   return (
     <div className="viewas-banner">
       <span className="vb-ico"><Ico name="eye" size={16} sw={1.9} /></span>
-      <span>Vue en tant que <span className="vb-role">{ROLES[role]?.nm || role}</span></span>
+      <span>Connecté en tant que <span className="vb-role">{viewAsUser.name}</span> · {ROLES[role]?.nm || role}</span>
       <span className="vb-ro">· lecture seule — aucune modification enregistrée</span>
       <span className="vb-spacer" />
-      <button className="vb-exit" onClick={() => setViewAs(null)}><Ico name="x" size={13} sw={2.2} />Quitter la vue</button>
+      <button className="vb-exit" onClick={() => setViewAs(null)}><Ico name="x" size={13} sw={2.2} />Revenir à mon compte</button>
     </div>);
 }
 
@@ -192,10 +185,14 @@ function App() {
     if (id === "wf_builder") setView("home");
   }
 
-  /* "View As" launcher: impersonate a role AND land on its first allowed section
-     (avoids a denied-flash when leaving the admin-only QA section). The sticky
-     banner's "Quitter la vue" exits impersonation (see ViewAsBanner). */
-  function startViewAs(r) { setViewAs(r); setSection(firstAllowedSection(r)); }
+  /* "View As" launcher: impersonate a seed USER (by id) AND land on the first
+     section that user's role can access (avoids a denied-flash when leaving the
+     admin-only QA section). The sticky banner exits impersonation (ViewAsBanner). */
+  function startViewAs(userId) {
+    setViewAs(userId);
+    const u = USERS.find((x) => x.id === userId);
+    if (u) setSection(firstAllowedSection(u.role));
+  }
 
   /* business setup handlers */
   function bizStartNew() { setBizDraft({ ...DEFAULT_BIZ }); setBizView("wizard"); }
