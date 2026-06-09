@@ -115,13 +115,29 @@ npm run test:watch
 - ✅ Workflow Builder, Business Setup (création + édition + normalisation legacy), Console, Requêtes, outil QA View As : tous opérationnels.
 - ✅ **Design system unifié** : un seul fichier de tokens (`public/ds/colors_and_type.css`) est la source unique. `studio.css` / `studio-views.css` ne contiennent plus de `:root` parallèle ni de hex en dur (hors `#fff`/`#000` = blanc/noir marque, et ombres `rgba`). Palette étendue documentée (neutres, ambre, accents rôles) ; ramps de statut **dérivés des primitives marque** par `color-mix` (rien d'inventé). Contraste texte vérifié ≥ 4.5:1 (WCAG AA).
 
-**Dernier travail (9 juin)** : réconciliation du design system en source unique, alignée marque
-(succès `#2EC834` / erreur `#DD6342` / noir `#000000`) — base vive sur les remplissages, nuance
-dérivée foncée sur les textes pour la lisibilité.
+**Dernier travail (9 juin)** : **seed de démo complet** (`src/seed.js` = nouvelle SSoT du graphe
+org + users) et **vue Entreprise** (`src/org.jsx`). Casting validé avec le PM : ShareID (Simon
+Admin owner + Hanane Wahibi Sales) ; 3 business indépendants (équipes complète / sans expert /
+minimale) ; 2 groupes (Société Générale avec une filiale PII coupée → cas ◐, Crédit Mutuel) ;
+1 retailer (Tessi, mur de données) revendant un business operator-only (Mutuelle Origin) ; 1 pôle
+anti-fraude operator-only multi-business. 27 users, 8 business, les 4 entités et 8 rôles couverts.
+- `session.jsx` : on démarre connecté **Simon / ShareID Admin** (voit tout, View As accessible) ;
+  `DEMO_USER`/`DEMO_ORGS` dérivent du seed. Clé localStorage bumpée `…_v2` (état propre).
+- `admin.jsx` (Utilisateurs) : liste dérivée du seed, colonne **Organisation** + annuaire global
+  pour ShareID Admin, scope par org active pour les autres rôles. Invitations rattachées à l'org active.
+- `biz.jsx` (Business Setup) : amorcé avec les 8 business du seed (source unique avec Entreprise).
+- **Requêtes + dashboard vidés** volontairement (`HAS_CONSOLE_DATA=false`, `REQUESTS`/`OPERATOR_QUEUE=[]`)
+  → empty states propres. Implémentation requêtes/stats = prochaine phase.
+- ✅ 112 tests toujours verts, build OK (~94 kB gzip). `access.js` non touché.
 
+**Avant (9 juin)** : réconciliation du design system en source unique, alignée marque.
 **Avant (8 juin)** : outil QA rôles & permissions (View As, multi-org, cas conditionnels ◐) ;
 fix édition d'un business existant ; ajout de la couche d'accès.
 
 **Pistes / à venir** :
-- Placeholders « À venir » sur les sections Admin : *Utilisateurs* (invitations, magic-links, logs), *Entreprise*, *Paramètres* (clés API, intégrations).
-- Enforcement backend des règles `SERVER-SIDE REQUIRED` (hors périmètre prototype, mais à garder en tête pour le vrai produit).
+- **Phase requêtes** puis **phase data** (dashboard) : repeupler avec une vraie donnée cohérente avec le seed.
+- **View As + contexte org** : aujourd'hui View As change le rôle mais pas l'org active (reste ShareID) ;
+  le scope fin par org (users/requêtes) sera à brancher quand on fera les requêtes.
+- Vue Entreprise en lecture seule pour l'instant (édition d'org / transfert d'ownership = itération dédiée).
+- Sections Admin restantes : *Paramètres* (clés API, intégrations).
+- Enforcement backend des règles `SERVER-SIDE REQUIRED` (hors périmètre prototype, mais à garder en tête).

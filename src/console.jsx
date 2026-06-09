@@ -2,7 +2,7 @@
 
 
 import React from "react";
-import { BarRows, CONSOLE_DATA, Donut, Funnel, Gauge, LineChart, Sparkline, StatCard, fmt, fmtFull } from "./charts.jsx";
+import { BarRows, CONSOLE_DATA, Donut, Funnel, Gauge, HAS_CONSOLE_DATA, LineChart, Sparkline, StatCard, fmt, fmtFull } from "./charts.jsx";
 import { Ico } from "./core.jsx";
 import { Home } from "./steps1.jsx";
 
@@ -54,7 +54,23 @@ function ConsoWidget({ testZero }) {
     </div>);
 }
 
+/* Empty state plein écran du dashboard — tant qu'il n'y a pas de données
+   (requêtes/stats), on n'affiche pas de chiffres mockés. */
+function ConsoleEmpty({ eyebrow, title }) {
+  return (
+    <React.Fragment>
+      <div className="dash-topbar"><div className="dt-head"><div className="eyebrow">{eyebrow}</div><h1>{title}</h1></div></div>
+      <div className="dash-body console-body">
+        <div className="panel"><div className="panel-body"><div className="panel-empty" style={{ padding: "56px 12px" }}>
+          <Ico name="activity" size={26} />
+          <span>Aucune donnée pour l'instant — les statistiques apparaîtront dès les premières vérifications.</span>
+        </div></div></div>
+      </div>
+    </React.Fragment>);
+}
+
 export function ConsoleHome({ onNav }) {
+  if (!HAS_CONSOLE_DATA) return <ConsoleEmpty eyebrow="Console" title="Accueil" />;
   const [mode, setMode] = React.useState("live");
   const [period, setPeriod] = React.useState("30 j");
   const [custom, setCustom] = React.useState(false);
@@ -148,6 +164,7 @@ function StatChip({ icon, label, value, on, onClick }) {
   return <button className={"stat-chip" + (on ? " on" : "")} onClick={onClick}><Ico name={icon} size={14} sw={1.8} />{label}{value && <b>{value}</b>}</button>;
 }
 export function ConsoleStats({ onNav }) {
+  if (!HAS_CONSOLE_DATA) return <ConsoleEmpty eyebrow="Console" title="Statistiques" />;
   const [groupBy, setGroupBy] = React.useState("country");
   const [compare, setCompare] = React.useState(true);
   const [period, setPeriod] = React.useState("30 j");

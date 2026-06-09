@@ -242,8 +242,14 @@ export const CONSOLE_DATA = {
   ],
 };
 
-/* requests history — seeded */
-export const REQUESTS = [
+/* Drapeau : y a-t-il des données console à afficher ? Vidé pour l'instant — on
+   implémente d'abord users + business ; requêtes et stats viendront ensuite.
+   Le dashboard (ConsoleHome/ConsoleStats) bascule sur un empty state propre. */
+export const HAS_CONSOLE_DATA = false;
+
+/* requests history — vidé (cf. HAS_CONSOLE_DATA) */
+export const REQUESTS = [];
+const _REQUESTS_SEED = [
   { id: "rq_8F2A", name: "Camille Laurent", dob: "1991-04-12", doc: "Carte d'identité", country: "France", flag: "🇫🇷", date: "2026-06-05 14:22", method: "NFC", level: "high", status: "ok", verdict: "Accepté", score: 98, business: "Néobanque Atlas", workflow: "Onboarding KYC particuliers", mode: "live" },
   { id: "rq_7C19", name: "Thomas Mercier", dob: "1985-11-30", doc: "Passeport", country: "Belgique", flag: "🇧🇪", date: "2026-06-05 13:58", method: "Photo", level: "low", status: "retry", verdict: "Reprise", score: 61, business: "Néobanque Atlas", workflow: "Onboarding KYC particuliers", mode: "live" },
   { id: "rq_6B04", name: "Sofia Marchetti", dob: "1996-02-08", doc: "Carte d'identité", country: "Italie", flag: "🇮🇹", date: "2026-06-05 13:41", method: "Vidéo", level: "subst", status: "review", verdict: "En revue", score: 73, business: "Assurance Prévia", workflow: "Réauthentification wallet", mode: "live" },
@@ -254,8 +260,9 @@ export const REQUESTS = [
   { id: "rq_1C18", name: "Hugo Petit", dob: "1987-06-22", doc: "Permis de conduire", country: "France", flag: "🇫🇷", date: "2026-06-04 18:12", method: "Photo", level: "low", status: "ok", verdict: "Accepté", score: 84, business: "Marketplace Volt", workflow: "Vérification vendeur", mode: "live" },
 ];
 
-/* operator queue — seeded */
-export const OPERATOR_QUEUE = [
+/* operator queue — vidé (cf. HAS_CONSOLE_DATA) */
+export const OPERATOR_QUEUE = [];
+const _OPERATOR_QUEUE_SEED = [
   { id: "rq_6B04", name: "Sofia Marchetti", workflow: "Réauthentification wallet", reason: "uncertainty", reasonLabel: "Incertitude IA", date: "il y a 6 min", country: "Italie", flag: "🇮🇹", sla: "ok", slaLabel: "32 min restantes", method: "Vidéo", level: "subst", scorePad: 71, scoreIad: 80, scoreAuth: 73 },
   { id: "rq_2D55", name: "Inès Moreau", workflow: "Onboarding sinistres", reason: "uncertainty", reasonLabel: "Incertitude IA", date: "il y a 18 min", country: "France", flag: "🇫🇷", sla: "warn", slaLabel: "9 min restantes", method: "Vidéo", level: "subst", scorePad: 64, scoreIad: 77, scoreAuth: 68 },
   { id: "rq_9A11", name: "Karim Haddad", workflow: "Onboarding KYC particuliers", reason: "rejected", reasonLabel: "Rejet à valider", date: "il y a 24 min", country: "France", flag: "🇫🇷", sla: "warn", slaLabel: "4 min restantes", method: "Photo", level: "low", scorePad: 41, scoreIad: 55, scoreAuth: 38 },
@@ -263,4 +270,4 @@ export const OPERATOR_QUEUE = [
   { id: "rq_7C90", name: "Marco Bianchi", workflow: "Réauthentification wallet", reason: "rejected", reasonLabel: "Rejet à valider", date: "il y a 53 min", country: "Italie", flag: "🇮🇹", sla: "risk", slaLabel: "SLA dépassé", method: "Vidéo", level: "subst", scorePad: 52, scoreIad: 61, scoreAuth: 49 },
 ];
 
-export const OPERATOR_STATS = { handled: 37, avgTime: "2 min 40", aiAgree: 91 };
+export const OPERATOR_STATS = { handled: 0, avgTime: "—", aiAgree: 0 };

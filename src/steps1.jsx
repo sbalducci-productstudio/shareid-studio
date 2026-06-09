@@ -4,7 +4,7 @@ import {
   Ico, DRIVERS, VERIF_TYPES, AUTH_SOURCES, SIGNATURE_LEVELS, CAPTURE_METHODS, captureLabel,
   FACE_PRESETS, LEVELS, LEVEL_KEYS, achievedLevel, coherence, effTarget, EidasTag,
 } from "./core.jsx";
-import { canAccessSection } from "./access.js";
+import { canAccessSection, can, ROLES, ROLE_KEYS } from "./access.js";
 import { useSession } from "./session.jsx";
 
 /* Libellé court du type de vérification d'un workflow (cartes / tableau). */
@@ -47,6 +47,8 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
   return (
     <aside className="dash-rail">
       <div className="rail-brand"><img src={import.meta.env.BASE_URL + "ds/logo-shareid.svg"} alt="ShareID" /><span className="crumb">Studio</span></div>
+      {/* Multi-org : sélecteur d'org de l'utilisateur connecté, en haut sous le logo. */}
+      <AccountSwitcher onNav={onNav} />
       <nav className="dash-nav">
         {groups.map((g) => (
           <div className="nav-group" key={g.label}>
@@ -61,7 +63,8 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
           </div>
         ))}
       </nav>
-      <AccountSwitcher />
+      {/* View As : outil d'observation réservé au ShareID Admin, en bas, à part. */}
+      <ViewAsSwitcher />
     </aside>
   );
 }
@@ -69,39 +72,92 @@ export function DashRail({ active = "wf_builder", count = 0, onNav }) {
 /* Account block = org switcher + role impersonator. In production the active
    (org, role) comes from the authenticated session; here it's a demo control so
    every gating + PII rule can be exercised live. One role per org (access model). */
-function AccountSwitcher() {
-  const { user, orgs, org, roleMeta, entity, switchOrg } = useSession();
+const orgMark = (nm) => (nm || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+function AccountSwitcher({ onNav }) {
+  const { user, orgs, org, role, roleMeta, entity, switchOrg } = useSession();
   const [open, setOpen] = React.useState(false);
   const initials = user.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-  const orgInitials = (org.nm || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  // Qui peut créer une organisation (cf. modèle d'accès) — sinon on cache l'action.
+  const canCreate = can(role, "createBizGroup") || can(role, "configureBusiness");
   return (
-    <div className="dash-account" style={{ position: "relative" }}>
+    <div className="dash-account top" style={{ position: "relative" }}>
       {open && (
-        <div className="combo-pop" style={{ bottom: 64, left: 12, right: 12, maxHeight: 320, overflowY: "auto" }}>
-          <div className="nav-group-l" style={{ padding: "4px 10px" }}>Changer d'organisation · rôle</div>
+        <div className="combo-pop org-pop" style={{ top: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 420, overflowY: "auto" }}>
+          {/* Qui je suis */}
+          <div className="org-pop-head">
+            <span className="req-ava">{initials}</span>
+            <div className="op-id"><span className="op-nm">{user.name}</span><span className="op-mail mono">{user.email}</span></div>
+          </div>
+          {/* Quel rôle j'ai (sur l'org active) */}
+          <div className="op-role"><span className="op-role-k">Rôle actuel</span><span className={"role-tag " + roleMeta.cls}>{roleMeta.nm}</span></div>
+          <div className="combo-div" />
+          {/* Les organisations auxquelles je peux prétendre */}
+          <div className="nav-group-l" style={{ padding: "2px 10px 6px" }}>Mes organisations</div>
           {orgs.map((o) => (
-            <button key={o.id} className="combo-opt" style={{ alignItems: "flex-start", gap: 8 }}
-              onClick={() => { switchOrg(o.id); setOpen(false); }}>
-              <span className={"mark sq"} style={o.id === org.id ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}>
-                <Ico name="check" size={11} sw={3} style={{ opacity: o.id === org.id ? 1 : 0 }} />
+            <button key={o.id} className={"org-opt" + (o.id === org.id ? " on" : "")} onClick={() => { switchOrg(o.id); setOpen(false); }}>
+              <span className="org-opt-mk">{orgMark(o.nm)}</span>
+              <span className="org-opt-id">
+                <span className="org-opt-nm">{o.nm}</span>
+                <span className="org-opt-sub">{ENTITY_LABEL[o.entity]} · {ROLE_LABEL[o.role]}</span>
               </span>
-              <span style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
-                <span style={{ fontSize: 12.5 }}>{o.nm}</span>
-                <span className="hint" style={{ fontSize: 10.5 }}>{ENTITY_LABEL[o.entity]} · {ROLE_LABEL[o.role]}</span>
+              {o.id === org.id && <Ico name="check" size={15} sw={2.4} />}
+            </button>
+          ))}
+          {/* Créer une organisation */}
+          {canCreate && (
+            <React.Fragment>
+              <div className="combo-div" />
+              <button className="org-create" onClick={() => { setOpen(false); onNav && onNav("biz_setup"); }}>
+                <span className="org-create-ic"><Ico name="plus" size={15} sw={2.2} /></span>
+                <span>Créer une organisation</span>
+              </button>
+            </React.Fragment>
+          )}
+        </div>
+      )}
+      <button className="dash-biz" onClick={() => setOpen((v) => !v)}>
+        <span className="biz-mk">{orgMark(org.nm)}</span>
+        <span className="biz-info"><span className="biz-nm">{org.nm}</span><span className="biz-env">{entity.nm} · {roleMeta.nm}</span></span>
+        <Ico name="chevDown" size={15} sw={1.8} />
+      </button>
+    </div>
+  );
+}
+/* View As — sélecteur d'observation réservé au ShareID Admin (en bas du rail).
+   Feature distincte du multi-org : ici on ne change pas d'org, on REND le Studio
+   comme un autre rôle le verrait (lecture seule). Le rôle réel reste ShareID
+   Admin ; quitter l'observation revient à la vue admin. La redirection vers une
+   section accessible est gérée par l'effet de garde dans App.jsx. */
+function ViewAsSwitcher() {
+  const { realRole, role, isViewAs, viewAsRole, setViewAs } = useSession();
+  const [open, setOpen] = React.useState(false);
+  if (realRole !== "sid_admin") return null; // outil admin uniquement
+  return (
+    <div className="dash-viewas" style={{ position: "relative" }}>
+      {open && (
+        <div className="combo-pop" style={{ top: "auto", bottom: "calc(100% + 6px)", left: 0, right: 0, maxHeight: 300, overflowY: "auto" }}>
+          <div className="nav-group-l" style={{ padding: "4px 10px" }}>Observer en tant que…</div>
+          {isViewAs && (
+            <button className="combo-opt" style={{ gap: 8 }} onClick={() => { setViewAs(null); setOpen(false); }}>
+              <span className="mark sq"><Ico name="x" size={10} sw={3} /></span>
+              <span style={{ fontSize: 12.5 }}>Quitter l'observation</span>
+            </button>
+          )}
+          {ROLE_KEYS.map((r) => (
+            <button key={r} className="combo-opt" style={{ gap: 8 }} onClick={() => { setViewAs(r); setOpen(false); }}>
+              <span className={"mark sq"} style={viewAsRole === r ? { borderColor: "var(--color-main)", background: "var(--color-main)" } : null}>
+                <Ico name="check" size={11} sw={3} style={{ opacity: viewAsRole === r ? 1 : 0 }} />
               </span>
+              <span style={{ fontSize: 12.5 }}>{ROLES[r].nm}</span>
             </button>
           ))}
         </div>
       )}
-      <button className="dash-biz" onClick={() => setOpen((v) => !v)}>
-        <span className="biz-mk">{orgInitials}</span>
-        <span className="biz-info"><span className="biz-nm">{org.nm}</span><span className="biz-env">{entity.nm}</span></span>
-        <Ico name="chevDown" size={15} sw={1.8} />
+      <button className={"dash-viewas-btn" + (isViewAs ? " on" : "")} onClick={() => setOpen((v) => !v)}>
+        <Ico name="eye" size={15} sw={1.8} />
+        <span className="va-info"><span className="va-lab">View As</span><span className="va-sub">{isViewAs ? ROLES[role].nm : "Observer un rôle"}</span></span>
+        <Ico name="chevUp" size={14} sw={1.8} />
       </button>
-      <div className="dash-user">
-        <span className="ava">{initials}</span>
-        <span className="u-info"><span className="u-nm">{user.name}</span><span className="u-role">{roleMeta.nm}</span></span>
-      </div>
     </div>
   );
 }

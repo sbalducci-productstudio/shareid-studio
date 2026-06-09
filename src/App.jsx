@@ -16,10 +16,18 @@ import { ManageUsers, ProductDemo } from "./admin.jsx";
 import { BizList, BizWizard, BizEdit } from "./biz.jsx";
 import { DEFAULT_BIZ } from "./biz-steps.jsx";
 import { AccessQA } from "./qa.jsx";
+import { CompanyView } from "./org.jsx";
+import { SEED_BUSINESSES } from "./seed.js";
 import { canAccessSection, can, ROLES } from "./access.js";
 import { useSession } from "./session.jsx";
 
-const LS_KEY = "shareid_studio_v1";
+// v2 : repart d'un état propre (nouveau seed orgs/users, business amorcés).
+const LS_KEY = "shareid_studio_v2";
+
+/* Business amorcés depuis le seed (source unique avec la vue Entreprise) :
+   chaque descripteur est étalé par-dessus DEFAULT_BIZ pour devenir un business
+   complet et éditable dans Business Setup. */
+const SEEDED_BUSINESSES = SEED_BUSINESSES.map((b) => ({ ...DEFAULT_BIZ, ...b }));
 
 /* Thème par défaut (anciennement piloté par le Tweaks panel du canvas Claude Design). */
 const THEME = { accent: "#3253D1", density: "confort", cards: "epure" };
@@ -151,7 +159,7 @@ function App() {
   const [cfg, setCfg] = useState(saved.cfg || { ...DEFAULT_CFG });
   const [currentKey, setCurrentKey] = useState(saved.currentKey || "config");
   const [workflows, setWorkflows] = useState(saved.workflows || []);
-  const [businesses, setBusinesses] = useState(saved.businesses || []);
+  const [businesses, setBusinesses] = useState(() => (saved.businesses && saved.businesses.length) ? saved.businesses : SEEDED_BUSINESSES);
   const [bizView, setBizView] = useState("list"); // list | wizard | edit
   const [bizDraft, setBizDraft] = useState(() => ({ ...DEFAULT_BIZ }));
   const [bizEditIdx, setBizEditIdx] = useState(-1);
@@ -322,7 +330,7 @@ function App() {
 
   /* console + admin sections (rendered inside the shell) */
   if (section !== "wf_builder") {
-    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers, access: AccessQA }[section];
+    const Console = { home: ConsoleHome, stats: ConsoleStats, requests: RequestsHistory, operator: OperatorQueue, demo: ProductDemo, users: ManageUsers, business: CompanyView, access: AccessQA }[section];
     return <React.Fragment><Shell section={section} count={workflows.length} onNav={navTo}>
       {Console ? <Console onNav={navTo} onViewAs={startViewAs} /> : <Placeholder section={section} />}
     </Shell></React.Fragment>;

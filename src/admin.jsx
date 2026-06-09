@@ -5,6 +5,7 @@ import React from "react";
 import { EidasTag, Ico } from "./core.jsx";
 import { ROLES, creatableRoles } from "./access.js";
 import { useSession } from "./session.jsx";
+import { USERS, orgById, orgBusinesses } from "./seed.js";
 
 /* Role display metadata is derived from the access-model SSoT so labels/keys
    never drift from the canonical roles. */
@@ -15,20 +16,22 @@ const ROLE_META = ROLES;
 const OWNER_ELIGIBLE = Object.keys(ROLES).filter((r) => r.endsWith("_admin") && r !== "sid_admin");
 const USER_STATUS = { active: { nm: "Actif", cls: "active" }, disabled: { nm: "Désactivé", cls: "fail" }, pending: { nm: "En attente", cls: "review" } };
 
-const USERS_SEED = [
-  { id: "u1", name: "Marie Bernard", email: "marie.bernard@atlas.io", role: "biz_admin", owner: true, biz: ["Néobanque Atlas"], created: "2026-01-14", status: "active", last: "il y a 2 h", mfa: true },
-  { id: "u2", name: "Lucas Petit", email: "lucas.petit@atlas.io", role: "agent", biz: ["Néobanque Atlas"], created: "2026-02-03", status: "active", last: "hier", mfa: true },
-  { id: "u3", name: "Sofia Nguyen", email: "sofia.nguyen@atlas.io", role: "operator", biz: ["Néobanque Atlas"], created: "2026-02-20", status: "active", last: "il y a 18 min", mfa: true },
-  { id: "u4", name: "Karim Haddad", email: "karim.haddad@atlas.io", role: "expert", biz: ["Néobanque Atlas"], created: "2026-03-01", status: "active", last: "il y a 3 j", mfa: true },
-  { id: "u5", name: "Thomas Mercier", email: "thomas.mercier@atlas.io", role: "agent", biz: ["Néobanque Atlas"], created: "2026-05-28", status: "pending", last: "—", mfa: false },
-  { id: "u6", name: "Emma Laurent", email: "emma.laurent@atlas.io", role: "agent", biz: ["Néobanque Atlas"], created: "2026-01-30", status: "disabled", last: "il y a 2 mois", mfa: true },
-];
-function userInitials(n) { return n.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
+/* Liste des utilisateurs dérivée du seed (source unique) : on décore chaque user
+   du nom de son org et des business qu'il « touche » pour l'affichage. */
+const USERS_SEED = USERS.map((u) => {
+  const o = orgById(u.org);
+  const bizNames = orgBusinesses(o);
+  return { ...u, orgNm: o ? o.nm : "—", biz: bizNames == null ? ["Tous"] : (bizNames.length ? bizNames : ["—"]) };
+});
+function userInitials(n) { return (n || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 
 /* ----------------------------- Manage Users ----------------------------- */
 export function ManageUsers() {
-  const { role: myRole } = useSession();
+  const { role: myRole, org } = useSession();
   const creatable = creatableRoles(myRole); // USER-CREATION RULE — roles I may grant
+  /* ShareID (Admin/Sales) voit l'annuaire global ; tout autre rôle est scopé aux
+     users de son organisation active. (Le scope fin par requête est SERVER-SIDE.) */
+  const isGlobal = myRole === "sid_admin" || myRole === "sid_sales";
   const [users, setUsers] = React.useState(USERS_SEED);
   const [q, setQ] = React.useState("");
   const [role, setRole] = React.useState("all");
@@ -36,6 +39,7 @@ export function ManageUsers() {
   const [sel, setSel] = React.useState(null);
   const [invite, setInvite] = React.useState(false);
   const rows = users.filter((u) =>
+    (isGlobal || u.org === org.id) &&
     (q === "" || u.name.toLowerCase().includes(q.toLowerCase()) || u.email.toLowerCase().includes(q.toLowerCase())) &&
     (role === "all" || u.role === role) &&
     (status === "all" || u.status === status));
@@ -68,7 +72,7 @@ export function ManageUsers() {
         <div className="wf-table-wrap">
           <div className="wf-table-scroll">
             <table className="wf-table">
-              <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Business accessibles</th><th>Créé le</th><th>Statut</th></tr></thead>
+              <thead><tr><th>Nom</th><th>Email</th>{isGlobal && <th>Organisation</th>}<th>Rôle</th><th>Business accessibles</th><th>Créé le</th><th>Statut</th></tr></thead>
               <tbody>
                 {rows.map((u) => {
                   const rm = ROLE_META[u.role], sm = USER_STATUS[u.status];
@@ -76,6 +80,7 @@ export function ManageUsers() {
                     <tr key={u.id} className="wf-row" onClick={() => setSel(u)}>
                       <td><div className="req-name"><span className="req-ava">{userInitials(u.name)}</span><div><span className="wf-row-t" style={{ fontSize: 13 }}>{u.name}</span>{u.owner && <span className="owner-tag">Owner</span>}</div></div></td>
                       <td><span className="wf-row-sub mono" style={{ fontSize: 11.5 }}>{u.email}</span></td>
+                      {isGlobal && <td><span className="wf-row-sub">{u.orgNm}</span></td>}
                       <td><span className={"role-tag " + rm.cls}>{rm.nm}</span></td>
                       <td><span className="wf-row-sub">{u.biz.join(", ")}</span></td>
                       <td><span className="wf-row-sub">{u.created}</span></td>
@@ -88,7 +93,7 @@ export function ManageUsers() {
         </div>
       </div>
       {sel && <UserDrawer u={sel} creatable={creatable} onClose={() => setSel(null)} onUpdate={update} onTransfer={transferOwnership} />}
-      {invite && <InviteModal creatable={creatable} onClose={() => setInvite(false)} onAdd={addUser} />}
+      {invite && <InviteModal creatable={creatable} org={org} onClose={() => setInvite(false)} onAdd={addUser} />}
     </React.Fragment>);
 }
 
@@ -143,13 +148,14 @@ function UserDrawer({ u, creatable = [], onClose, onUpdate, onTransfer }) {
     </div>);
 }
 
-function InviteModal({ creatable = [], onClose, onAdd }) {
+function InviteModal({ creatable = [], org, onClose, onAdd }) {
   const [email, setEmail] = React.useState("");
   // Default to the lowest-privilege creatable role (Agent if available).
   const [role, setRole] = React.useState(() => creatable.includes("agent") ? "agent" : creatable[0]);
   const valid = /\S+@\S+\.\S+/.test(email) && !!role;
   function send() {
-    onAdd({ id: "u" + Date.now(), name: email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), email, role, biz: ["Néobanque Atlas"], created: "à l'instant", status: "pending", last: "—", mfa: false });
+    // L'invité rejoint l'organisation active de l'admin qui l'invite.
+    onAdd({ id: "u" + Date.now(), name: email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, (c) => c.toUpperCase()), email, role, org: org ? org.id : "shareid", orgNm: org ? org.nm : "—", biz: org ? [org.nm] : ["—"], created: "à l'instant", status: "pending", last: "—", mfa: false });
   }
   return (
     <div className="scrim" onClick={onClose}>

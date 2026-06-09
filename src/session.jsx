@@ -11,39 +11,42 @@
    client-side switcher. */
 import React from "react";
 import { ROLES, ENTITIES } from "./access.js";
+import { USERS, orgById, orgBusinesses } from "./seed.js";
 
-const LS_KEY = "shareid_session_v1";
+const LS_KEY = "shareid_session_v2";
 
-/* Demo memberships — one role per org, spanning every entity type so each
-   access path is reachable from the impersonator.
-   - `subsidiaryAllowsPII` models the Group rule (a subsidiary may disable the
-     group's PII view).
-   - `businesses` is the set of business names (matching the data in charts.jsx)
-     this org may see; `null` means "all" (ShareID). Used by the data selector
-     to scope the requests list. */
-export const DEMO_ORGS = [
-  { id: "atlas",    nm: "Néobanque Atlas",   entity: "business", role: "biz_admin", owner: true, businesses: ["Néobanque Atlas"] },
-  { id: "atlas_ag", nm: "Néobanque Atlas",   entity: "business", role: "agent",       businesses: ["Néobanque Atlas"] },
-  // Operator/Expert are partner roles that may handle several clients' requests
-  // (operator-only business). Scoped across both client businesses so the
-  // review queue actually contains work to do.
-  { id: "atlas_op", nm: "Pôle anti-fraude",  entity: "business", role: "operator",    businesses: ["Néobanque Atlas", "Assurance Prévia"] },
-  { id: "atlas_ex", nm: "Pôle anti-fraude",  entity: "business", role: "expert",      businesses: ["Néobanque Atlas", "Assurance Prévia"] },
-  { id: "previa",   nm: "Assurance Prévia",  entity: "business", role: "biz_admin",   businesses: ["Assurance Prévia"] },
-  { id: "sg_group", nm: "Groupe Société Générale", entity: "group", role: "group_admin", subsidiaryAllowsPII: true, businesses: ["Néobanque Atlas", "Assurance Prévia"] },
-  { id: "tessi",    nm: "Tessi (Retailer)",  entity: "retailer", role: "retailer_admin", businesses: [] },
-  { id: "shareid",  nm: "ShareID",           entity: "shareid",  role: "sid_admin", owner: true, businesses: null },
-  { id: "shareid_s",nm: "ShareID",           entity: "shareid",  role: "sid_sales",  businesses: null },
-];
+/* Qui est connecté par défaut : Simon, ShareID Admin (l'autorité plateforme). On
+   démarre en Admin pour que toute l'arborescence soit visible et que le « View
+   As » (outil QA) soit accessible d'emblée — c'est le rôle qui voit tout. */
+const ME = USERS.find((u) => u.role === "sid_admin");
+export const DEMO_USER = { name: ME.name, email: ME.email };
 
-export const DEMO_USER = { name: "Marie Bernard", email: "marie.bernard@atlas.io" };
+/* MULTI-ORG — le sélecteur d'org (en haut de la sidebar) liste les organisations
+   où l'EMAIL connecté est membre, un rôle par org. C'est la vraie feature
+   multi-org du modèle d'accès : basculer change l'org active et le rôle suit.
+   (Pour observer d'AUTRES rôles sans changer d'org, c'est « View As », un outil
+   admin distinct, en bas de la sidebar.) Dérivé du seed → source unique.
+   `businesses` (null = tout) alimente le scope des requêtes côté sélecteur. */
+export const DEMO_ORGS = USERS
+  .filter((u) => u.email === ME.email)
+  .map((u) => {
+    const o = orgById(u.org);
+    return {
+      id: o.id, nm: o.nm, entity: o.entity, role: u.role, owner: !!u.owner,
+      businesses: orgBusinesses(o),
+      ...(o.entity === "group" ? { subsidiaryAllowsPII: true } : {}),
+    };
+  });
+
+// On démarre sur l'org ShareID (rôle Admin → voit tout + View As accessible).
+const DEFAULT_ORG_ID = ME.org;
 
 const SessionContext = React.createContext(null);
 
 export function SessionProvider({ children }) {
   const saved = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (e) { return {}; } })();
-  // Default to the Business Admin org — the most common, fully-featured case.
-  const [activeOrgId, setActiveOrgId] = React.useState(saved.activeOrgId || "atlas");
+  // Default to Simon's ShareID Admin org — voit tout, View As accessible.
+  const [activeOrgId, setActiveOrgId] = React.useState(saved.activeOrgId || DEFAULT_ORG_ID);
 
   /* "View As" — QA impersonation. A ShareID Admin can render the Studio exactly
      as any of the 8 roles would see it, WITHOUT changing their real membership.
@@ -62,6 +65,9 @@ export function SessionProvider({ children }) {
 
   const org = DEMO_ORGS.find((o) => o.id === activeOrgId) || DEMO_ORGS[0];
   const realRole = org.role;
+  // L'identité reste celle de l'utilisateur connecté (Simon) : on change d'ORG,
+  // pas de personne. Seul le rôle change selon l'org active.
+  const user = DEMO_USER;
   // The role the UI renders as: the impersonated role in View As, else the real one.
   const role = viewAsRole || realRole;
   const isViewAs = viewAsRole != null;
@@ -79,7 +85,7 @@ export function SessionProvider({ children }) {
     : org.subsidiaryAllowsPII !== false;
 
   const value = {
-    user: DEMO_USER,
+    user,
     orgs: DEMO_ORGS,
     org,
     role,            // effective role (impersonated when in View As)
