@@ -130,6 +130,19 @@ anti-fraude operator-only multi-business. 27 users, 8 business, les 4 entités e
   → empty states propres. Implémentation requêtes/stats = prochaine phase.
 - ✅ 112 tests toujours verts, build OK (~94 kB gzip). `access.js` non touché.
 
+**Dernier travail (9 juin) — refonte du wizard Business Setup** : nouvel ordre en 10 étapes
+(Identité → Type → Objectif → Niveau de risque → Périmètre → Rétention → Rôles & contacts →
+Branding → Facturation → Récap). Découpages : **Identité = nom seul** ; **Branding** isolé en
+étape dédiée (couleurs, logo, co-branding, écran end-user + aperçu) ; ancien step « Risque &
+opérateur » scindé en **Objectif** (drivers) + **Niveau de risque** (toggle opérateur déplacé dans
+**Type**). **3 types seulement** (Pay-as-you-go retiré comme type → reste un mode de facturation) ;
+libellé « Standard » → **« Business »** (id interne `"standard"` conservé pour seed/localStorage).
+**Drivers étendus à 6** (compliance, fraude, expérience, conversion, coûts, signature — *proposition
+à valider avec Sarah*). Étape conditionnelle Groupe/Retailer (stub) retirée. Niveau de risque déjà
+conforme (4 paliers : Pas de risque / Faible / Moyen / Élevé). 112 tests verts, build OK (~95 kB gzip),
+`access.js` non touché. Touché : `biz-steps.jsx`, `biz.jsx`.
+
+**Avant (9 juin)** : seed de démo complet + vue Entreprise (cf. ci-dessus).
 **Avant (9 juin)** : réconciliation du design system en source unique, alignée marque.
 **Avant (8 juin)** : outil QA rôles & permissions (View As, multi-org, cas conditionnels ◐) ;
 fix édition d'un business existant ; ajout de la couche d'accès.

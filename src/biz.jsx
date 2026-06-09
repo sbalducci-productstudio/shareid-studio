@@ -2,31 +2,33 @@
 
 
 import React from "react";
-import { BIZ_COUNTRIES, BIZ_DRIVERS, BIZ_TYPES, BizBilling, BizCond, BizIdentity, BizObjective, BizRetention, BizReview, BizScope, BizType, BizUsers, DEFAULT_BIZ, EndUserPreview, RETENTION, TOKEN_PKGS, eur, flagOf, pkgOf, retLabel } from "./biz-steps.jsx";
+import { BIZ_COUNTRIES, BIZ_DRIVERS, BIZ_TYPES, BizBilling, BizBranding, BizDrivers, BizIdentity, BizRetention, BizReview, BizRisk, BizScope, BizType, BizUsers, DEFAULT_BIZ, EndUserPreview, RETENTION, TOKEN_PKGS, eur, flagOf, pkgOf, retLabel } from "./biz-steps.jsx";
 import { fmt, pct } from "./charts.jsx";
 import { DOC_TYPES, DocArt, EidasTag, Ico, LEVELS, RISK_KEYS } from "./core.jsx";
 
-function condName(type) { return { retailer: "Hiérarchie retailer", group: "Groupe" }[type] || "Spécifique"; }
-function bizSteps(type) {
-  const base = [
-    { key: "type", nm: "Type de business", Comp: BizType },
+/* Ordre du wizard (cf. refonte Business Setup) : identité → type → objectif → risque →
+   périmètre → rétention → rôles → branding → facturation → récap. */
+function bizSteps() {
+  return [
     { key: "identity", nm: "Identité", Comp: BizIdentity },
-    { key: "objective", nm: "Risque & opérateur", Comp: BizObjective },
+    { key: "type", nm: "Type de business", Comp: BizType },
+    { key: "drivers", nm: "Objectif", Comp: BizDrivers },
+    { key: "risk", nm: "Niveau de risque", Comp: BizRisk },
     { key: "scope", nm: "Périmètre", Comp: BizScope },
     { key: "retention", nm: "Rétention", Comp: BizRetention },
     { key: "users", nm: "Rôles & contacts", Comp: BizUsers },
+    { key: "branding", nm: "Branding", Comp: BizBranding },
+    { key: "billing", nm: "Facturation", Comp: BizBilling },
+    { key: "review", nm: "Récapitulatif", Comp: BizReview },
   ];
-  if (type === "group" || type === "retailer") base.push({ key: "cond", nm: condName(type), Comp: BizCond });
-  base.push({ key: "billing", nm: "Facturation", Comp: BizBilling });
-  base.push({ key: "review", nm: "Récapitulatif", Comp: BizReview });
-  return base;
 }
 function bizValid(key, b) {
   switch (key) {
-    case "identity": return b.name.trim().length > 0 && b.color && b.colorSecondary;
-    case "objective": return b.drivers.length >= 1;
+    case "identity": return b.name.trim().length > 0;
+    case "drivers": return b.drivers.length >= 1;
     case "scope": return b.countries.length >= 1 && b.docTypes.length >= 1;
     case "users": return b.owner.name.trim() && b.owner.email.trim();
+    case "branding": return !!(b.color && b.colorSecondary);
     default: return true;
   }
 }
@@ -96,8 +98,8 @@ export function BizList({ businesses, onCreate, onOpen }) {
 
 /* ----------------------------- Wizard ----------------------------- */
 export function BizWizard({ draft, setDraft, onFinish, onExit }) {
-  const steps = bizSteps(draft.type);
-  const [key, setKey] = React.useState("type");
+  const steps = bizSteps();
+  const [key, setKey] = React.useState("identity");
   const idx = Math.max(0, steps.findIndex((s) => s.key === key));
   const step = steps[idx];
   const set = (patch) => setDraft({ ...draft, ...patch });
@@ -106,6 +108,18 @@ export function BizWizard({ draft, setDraft, onFinish, onExit }) {
 
   function next() { if (step.key === "review") { onFinish(); return; } const nx = steps[idx + 1]; if (nx) setKey(nx.key); }
   function back() { if (idx <= 0) { onExit(); return; } setKey(steps[idx - 1].key); }
+
+  // Accessibilité : Entrée valide l'étape (= clic sur « Continuer »). On laisse passer les boutons
+  // (toggles, options, sélecteurs : Entrée les active nativement) et les textareas/champs éditables.
+  // Les sous-champs qui ont un sens propre pour Entrée (recherche de pays) stoppent la propagation.
+  function onKeyDown(e) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    const t = e.target;
+    if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+    if (!canNext) return;
+    e.preventDefault();
+    next();
+  }
 
   const Comp = step.Comp;
   return (
@@ -128,7 +142,7 @@ export function BizWizard({ draft, setDraft, onFinish, onExit }) {
             <div className="brm-row"><span className="brm-k">Facturation</span><span className="brm-v">{pkgOf(draft.pkg).t} · {fmt(pkgOf(draft.pkg).tokens)}</span></div>
           </div>
         </aside>
-        <div className="main">
+        <div className="main" onKeyDown={onKeyDown}>
           <div className="topbar"><span className="wf"><span className="muted">{draft.name ? "Business · " : "Nouveau business · "}</span>{draft.name || "sans nom"}</span><span className="type-badge">{bt.t}</span></div>
           <div className="body"><Comp biz={draft} set={set} n={idx + 1} total={steps.length} /></div>
           <div className="footer">
@@ -246,7 +260,7 @@ export function BizEdit({ biz, onSave, onBack }) {
           <span className="lab">Pays ({b.countries.length})</span>
           <div className="input-wrap" style={{ maxWidth: 320, marginTop: 8 }}>
             <span className="ico"><Ico name="search" size={15} /></span>
-            <input className="inp with-icon" value={cq} placeholder="Ajouter un pays…" onChange={(e) => setCq(e.target.value)} />
+            <input className="inp with-icon" value={cq} placeholder="Ajouter un pays…" onChange={(e) => setCq(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && countryMatches.length) { e.preventDefault(); addCountry(countryMatches[0]); } }} />
             {countryMatches.length > 0 &&
               <div className="combo-pop">{countryMatches.map((c) => <button key={c} className="combo-opt" onClick={() => addCountry(c)}><span className="br-flag">{flagOf(c)}</span>{c}<Ico name="plus" size={13} sw={2} style={{ marginLeft: "auto", color: "var(--muted-soft)" }} /></button>)}</div>}
           </div>

@@ -13,17 +13,24 @@ import { useSession } from "./session.jsx";
    est transverse à tous les types (voir isPilot). « Partenaire opérateur » est une typologie
    d'ACCÈS (humains qui traitent les requêtes de plusieurs clients), pas un type d'entité — gardé
    optionnel. La base business est commune ; les types ne sont que des surcouches. */
+/* 3 types seulement (Pay-as-you-go n'est plus un TYPE : c'est un mode de facturation, cf. billingMode).
+   NB : l'id du cas standard reste "standard" (seed + localStorage historiques), seul le LIBELLÉ
+   visible devient « Business ». */
 export const BIZ_TYPES = [
-  { id: "standard", t: "Standard", icon: "building", d: "Une entité unique (ex. Crédit du Maroc). Le cas le plus courant.", cycle: "Une entité" },
-  { id: "group", t: "Groupe", icon: "globe", d: "Plusieurs entités réunies, avec une vue consolidée par-dessus (ex. Société Générale : Bourso, Crédit du Nord…).", cycle: "Multi-entités + vue globale", soon: true },
-  { id: "retailer", t: "Retailer", icon: "layers", d: "Revendeur de ShareID (ex. Tessi) qui vend à des entités. Voit le volume/usage pour la facturation, jamais les données personnelles de ses clients.", cycle: "Revend à des entités", soon: true },
-  { id: "payg", t: "Pay-as-you-go", icon: "zap", d: "Petites structures : facturation à l'usage et accès dashboard réduit. Même socle, setup par défaut allégé.", cycle: "Petite structure · à l'usage" },
+  { id: "standard", t: "Business", icon: "building", d: "Une entité unique (ex. Crédit du Maroc). Le cas le plus courant.", cycle: "Une entité" },
+  { id: "group", t: "Groupe", icon: "globe", d: "Plusieurs entités réunies sous une vue consolidée (ex. Société Générale : Boursorama, Crédit du Nord…).", cycle: "Multi-entités + vue globale", soon: true },
+  { id: "retailer", t: "Retailer", icon: "layers", d: "Revendeur de ShareID (ex. Tessi) qui vend à des entités. Voit le volume pour la facturation, jamais les données personnelles de ses clients.", cycle: "Revend à des entités", soon: true },
 ];
 
+/* §3 — « Pourquoi nos clients nous consomment ». Catalogue de motivations (4–6) servant à
+   recommander le bon parcours, jamais bloquant. Sélection multiple (max 3 par business). */
 export const BIZ_DRIVERS = [
   { id: "compliance", icon: "fileCheck", t: "Obligations réglementaires", d: "KYC/AML, lutte anti-blanchiment et obligations sectorielles." },
   { id: "fraud", icon: "shieldAlert", t: "Lutte contre la fraude", d: "Détecter et bloquer les usurpations d'identité." },
-  { id: "experience", icon: "zap", t: "Expérience utilisateur", d: "Fluidifier le parcours et réduire les frictions." },
+  { id: "experience", icon: "smile", t: "Expérience utilisateur", d: "Fluidifier le parcours et réduire les frictions." },
+  { id: "conversion", icon: "activity", t: "Conversion & acquisition", d: "Réduire l'abandon à l'onboarding, augmenter le taux de complétion." },
+  { id: "cost", icon: "wallet", t: "Réduction des coûts", d: "Automatiser la vérification manuelle et alléger les équipes." },
+  { id: "signature", icon: "doc", t: "Signature & contractualisation", d: "Signer et contractualiser à distance, à valeur légale." },
 ];
 
 /* §5 — rétention bornée : minimum 12 h, maximum 60 jours (pas d'option au-delà). */
@@ -110,7 +117,7 @@ function BizHead({ n, total, title, sub }) {
 export function BizType({ biz, set, n, total }) {
   return (
     <div className="body-inner step-anim">
-      <BizHead n={n} total={total} title="Type de business" sub="L'unité atomique est une entité (une société, ex. Crédit du Maroc). Tous les types partagent le même socle — ils n'en sont que des surcouches." />
+      <BizHead n={n} total={total} title="Type de business" sub="Comment ce client est structuré. Un Business est une entité unique ; un Groupe en réunit plusieurs ; un Retailer les revend. Tous partagent le même socle." />
       <div className="opts" style={{ maxWidth: 680 }}>
         {BIZ_TYPES.map((bt) => {
           const sel = biz.type === bt.id;
@@ -149,6 +156,17 @@ export function BizType({ biz, set, n, total }) {
             <div className="note" style={{ marginTop: 12 }}><span className="ico"><Ico name="info" size={15} sw={1.9} /></span><div>Dates <b>purement indicatives</b> : aucune bascule automatique. La transformation en business définitif se fait à la main, sans perte de configuration.</div></div>
           </div>}
       </section>
+
+      <div className="step-sep" style={{ margin: "22px 0", maxWidth: 680 }} />
+
+      {/* §1 — la vérification par opérateur est un réglage business/global : un même compte
+          opérateur peut traiter les requêtes de plusieurs clients. */}
+      <section className="cfg-sec" style={{ maxWidth: 680 }}>
+        <div className="tgl-row">
+          <div className="tinfo"><div className="tt">Vérification par opérateur</div><div className="td">Autorise une revue par un opérateur humain. Réglé au niveau du business car un même compte opérateur peut traiter les requêtes de plusieurs clients. Le détail (systématique / sur seuil) se règle par workflow.</div></div>
+          <button className={"sw" + (biz.operatorEnabled ? " on" : "")} onClick={() => set({ operatorEnabled: !biz.operatorEnabled })} aria-label="Opérateur" />
+        </div>
+      </section>
     </div>);
 }
 
@@ -165,16 +183,23 @@ function ColorPicker({ value, onPick }) {
 }
 export function BizIdentity({ biz, set, n, total }) {
   return (
+    <div className="body-inner step-anim">
+      <BizHead n={n} total={total} title="Identité" sub="Le nom du business — unique sur la plateforme ShareID. C'est ainsi qu'il apparaît partout : dashboard, facturation, workflows." />
+      <section className="cfg-sec" style={{ maxWidth: 560 }}>
+        <div className="cfg-sec-h"><span className="cfg-sec-t">Nom du business</span><span className="chip brand sm">obligatoire</span></div>
+        <input className="inp" value={biz.name} placeholder="ex. Néobanque Atlas" onChange={(e) => set({ name: e.target.value })} autoFocus />
+        <span className="hint" style={{ marginTop: 8, display: "block" }}>Les couleurs, le logo et l'écran end-user se règlent à l'étape <b>Branding</b>, plus loin dans la configuration.</span>
+      </section>
+    </div>);
+}
+
+/* ----------------------------- Branding (couleurs, logo, écran end-user) ----------------------------- */
+export function BizBranding({ biz, set, n, total }) {
+  return (
     <div className="body-inner wide step-anim">
-      <BizHead n={n} total={total} title="Identité" sub="Le nom et le branding du business. Le nom et les couleurs sont obligatoires ; le logo et les textes pourront être complétés plus tard par l'owner." />
+      <BizHead n={n} total={total} title="Branding" sub="Les couleurs et le logo de la marque, et l'écran que verront vos utilisateurs. Tout se prévisualise en direct à droite." />
       <div className="biz-split">
         <div className="biz-form">
-          <section className="cfg-sec">
-            <div className="cfg-sec-h"><span className="cfg-sec-t">Nom du business</span><span className="chip brand sm">obligatoire</span></div>
-            <input className="inp" value={biz.name} placeholder="ex. Néobanque Atlas" onChange={(e) => set({ name: e.target.value })} />
-            <span className="hint" style={{ marginTop: 6 }}>Unique sur la plateforme ShareID.</span>
-          </section>
-          <div className="step-sep" style={{ margin: "22px 0" }} />
           <section className="cfg-sec">
             <div className="cfg-sec-h"><span className="cfg-sec-t">Couleurs de marque</span><span className="chip brand sm">obligatoire</span></div>
             <div className="brand-row">
@@ -214,24 +239,24 @@ export function BizIdentity({ biz, set, n, total }) {
     </div>);
 }
 
-/* ----------------------------- Step 3 — Risque & opérateur ----------------------------- */
-export function BizObjective({ biz, set, n, total }) {
+/* ----------------------------- Step — Objectif (drivers) ----------------------------- */
+export function BizDrivers({ biz, set, n, total }) {
   function toggle(id) {
     const has = biz.drivers.includes(id);
     if (has) set({ drivers: biz.drivers.filter((d) => d !== id) });
     else if (biz.drivers.length < 3) set({ drivers: [...biz.drivers, id] });
   }
-  const fric = { none: "l1", low: "l1", subst: "l2", high: "l3" };
   return (
     <div className="body-inner step-anim">
-      <BizHead n={n} total={total} title="Risque & opérateur" sub="Pourquoi ce client vérifie ses utilisateurs — pour vous recommander le bon parcours — et jusqu'où il peut aller en niveau de risque." />
+      <BizHead n={n} total={total} title="Objectif" sub="Pourquoi ce client vérifie ses utilisateurs. Sélectionnez jusqu'à 3 motivations — ça sert à recommander le bon parcours, jamais à bloquer." />
       <section className="cfg-sec">
-        <div className="cfg-sec-h" style={{ maxWidth: 680 }}><span className="cfg-sec-t">Pourquoi vérifient-ils ?</span><span className="counter">{biz.drivers.length} / 3</span></div>
-        <div className="opts g3" style={{ maxWidth: 680 }}>
+        <div className="cfg-sec-h" style={{ maxWidth: 720 }}><span className="cfg-sec-t">Pourquoi vérifient-ils ?</span><span className="counter">{biz.drivers.length} / 3</span></div>
+        <div className="opts g3" style={{ maxWidth: 720 }}>
           {BIZ_DRIVERS.map((d) => {
             const sel = biz.drivers.includes(d.id);
+            const locked = !sel && biz.drivers.length >= 3;
             return (
-              <button key={d.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => toggle(d.id)}>
+              <button key={d.id} className={"opt col" + (sel ? " sel" : "")} onClick={() => toggle(d.id)} disabled={locked} style={locked ? { opacity: 0.5 } : null}>
                 <div className="otop" style={{ width: "100%" }}><span className={"ico-tile" + (sel ? "" : " dim")}><Ico name={d.icon} size={19} /></span><span className="mark sq" style={{ marginLeft: "auto" }}><Ico name="check" size={12} sw={3} /></span></div>
                 <div className="obody"><div className="ot">{d.t}</div><div className="od">{d.d}</div></div>
               </button>);
@@ -239,10 +264,17 @@ export function BizObjective({ biz, set, n, total }) {
         </div>
         <span className="hint" style={{ marginTop: 10, display: "block" }}>Sert à recommander un parcours adapté lors de la création d'un workflow. Jamais bloquant.</span>
       </section>
-      <div className="step-sep" />
+    </div>);
+}
+
+/* ----------------------------- Step — Niveau de risque maximum ----------------------------- */
+export function BizRisk({ biz, set, n, total }) {
+  const fric = { none: "l1", low: "l1", subst: "l2", high: "l3" };
+  return (
+    <div className="body-inner step-anim">
+      <BizHead n={n} total={total} title="Niveau de risque maximum" sub="Le plafond de niveau de risque que ce business pourra exiger. Chaque workflow choisira librement son niveau dans cette limite — pas de minimum imposé." />
       <section className="cfg-sec">
-        <div className="cfg-sec-h"><span className="cfg-sec-t">Niveau de risque maximum</span></div>
-        <div className="opts g2-doc" style={{ maxWidth: 680 }}>
+        <div className="opts g2-doc" style={{ maxWidth: 720 }}>
           {RISK_KEYS.map((k) => {
             const sel = biz.riskMax === k;
             const desc = { none: "Extraction de données seule, sans vérification d'identité.", low: "Assurance légère, friction minimale.", subst: "Équilibre assurance / expérience.", high: "Assurance maximale — NFC + liveness." }[k];
@@ -257,18 +289,9 @@ export function BizObjective({ biz, set, n, total }) {
               </button>);
           })}
         </div>
-        <div className="note" style={{ maxWidth: 680, marginTop: 16 }}>
+        <div className="note" style={{ maxWidth: 720, marginTop: 16 }}>
           <span className="ico"><Ico name="info" size={15} sw={1.9} /></span>
           <div>C'est le <b>plafond</b> de consommation du business (logique de coût en jetons). Chaque workflow choisit librement son niveau dans cette limite — il n'y a pas de minimum imposé ici.</div>
-        </div>
-      </section>
-      <div className="step-sep" />
-      <section className="cfg-sec" style={{ maxWidth: 680 }}>
-        {/* §1 — l'opérateur est un réglage business/global : un même compte opérateur peut consommer plusieurs clients. */}
-        <div className="cfg-sec-h"><span className="cfg-sec-t">Vérification par opérateur</span></div>
-        <div className="tgl-row">
-          <div className="tinfo"><div className="tt">Revue humaine activée</div><div className="td">Autorise une revue par un opérateur humain. Réglé au niveau du business car un même compte opérateur peut traiter les requêtes de plusieurs clients. Le détail (systématique / sur seuil) se règle par workflow.</div></div>
-          <button className={"sw" + (biz.operatorEnabled ? " on" : "")} onClick={() => set({ operatorEnabled: !biz.operatorEnabled })} aria-label="Opérateur" />
         </div>
       </section>
     </div>);
@@ -308,7 +331,7 @@ export function BizScope({ biz, set, n, total }) {
         <div className="cfg-sec-h"><span className="cfg-sec-t">Pays autorisés</span><span className="counter">{biz.countries.length}</span></div>
         <div className="input-wrap" style={{ maxWidth: 360 }}>
           <span className="ico"><Ico name="search" size={16} /></span>
-          <input className="inp with-icon" value={q} placeholder="Rechercher un pays…" onChange={(e) => setQ(e.target.value)} />
+          <input className="inp with-icon" value={q} placeholder="Rechercher un pays…" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && matches.length) { e.preventDefault(); e.stopPropagation(); add(matches[0]); } }} />
           {matches.length > 0 &&
             <div className="combo-pop">
               {matches.map((c) => <button key={c} className="combo-opt" onClick={() => add(c)}><span className="br-flag">{flagOf(c)}</span>{c}<Ico name="plus" size={13} sw={2} style={{ marginLeft: "auto", color: "var(--muted-soft)" }} /></button>)}
@@ -444,25 +467,7 @@ export function BizUsers({ biz, set, n, total }) {
     </div>);
 }
 
-/* ----------------------------- Conditional step (stub) ----------------------------- */
-export function BizCond({ biz, set, n, total }) {
-  const map = {
-    retailer: { title: "Hiérarchie retailer", sub: "Configuration du retailer et des entités qu'il revend.", icon: "layers" },
-    group: { title: "Groupe", sub: "Configuration du groupe, de ses entités et de la vue consolidée.", icon: "globe" },
-  }[biz.type] || { title: "Spécifique", sub: "", icon: "info" };
-  return (
-    <div className="body-inner step-anim">
-      <BizHead n={n} total={total} title={map.title} sub={map.sub} />
-      <section className="cfg-sec" style={{ maxWidth: 560 }}>
-        <div className="stub-card">
-          <span className="ico-tile" style={{ width: 44, height: 44 }}><Ico name={map.icon} size={22} /></span>
-          <div><div className="ot" style={{ fontSize: 15 }}>Étape à itérer</div><div className="od" style={{ marginTop: 4 }}>Le tooling complet {map.title} (entités, hiérarchie, {biz.type === "group" ? "vue consolidée" : "refacturation"}) sera spécifié dans une itération dédiée. En V1 ces business sont configurés par un Admin ShareID.</div></div>
-        </div>
-      </section>
-    </div>);
-}
-
-/* ----------------------------- Step 7 — Facturation ----------------------------- */
+/* ----------------------------- Step — Facturation ----------------------------- */
 function SimCard({ tone, title, lines }) {
   return (
     <div className={"sim-card " + tone}>
