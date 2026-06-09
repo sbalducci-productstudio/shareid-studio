@@ -372,7 +372,11 @@ button.bill-mode.sel:hover{ border-color:var(--color-main); }
 .edit-title-row{ display:flex; align-items:center; gap:11px; flex-wrap:wrap; }
 .edit-title-row h1{ font-size:24px; }
 .edit-body{ display:flex; flex-direction:column; gap:16px; max-width:920px; }
-.edit-sec{ border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+/* flex-shrink:0 — `.edit-body` est un conteneur flex-column à hauteur contrainte
+   (il hérite de `.dash-body` : flex:1 + overflow:auto). Sans ça, les sections
+   rétrécissent pour tenir dans le viewport et, à cause d'overflow:hidden, rognent
+   leur contenu au lieu de laisser le conteneur défiler. */
+.edit-sec{ border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; flex-shrink:0; }
 .edit-sec-h{ display:flex; align-items:center; gap:11px; padding:15px 20px; border-bottom:1px solid var(--line); background:var(--panel-2); }
 .edit-sec-h h3{ font-size:14.5px; }
 .edit-guard{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:10.5px; color:var(--muted-soft); background:#fff; border:1px solid var(--line); padding:3px 9px; border-radius:999px; }
