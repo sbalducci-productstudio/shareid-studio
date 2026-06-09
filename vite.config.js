@@ -6,8 +6,9 @@ import react from "@vitejs/plugin-react";
 // prototype d'origine et lisible pour un apprentissage du code.
 export default defineConfig({
   // Servi sous un sous-chemin sur GitHub Pages : https://<user>.github.io/shareid-studio/
-  // En dev, Vite ignore `base` (sert depuis /). Tous les assets en tiennent compte
-  // via %BASE_URL% (index.html) et import.meta.env.BASE_URL (JSX).
+  // `base` s'applique EN DEV AUSSI : le serveur sert sous /shareid-studio/ et Vite
+  // préfixe `base` aux chemins root-absolus (`/studio.css`, `/src/main.jsx`) une seule
+  // fois. Dans le JSX, utiliser import.meta.env.BASE_URL pour les assets de public/.
   base: "/shareid-studio/",
   plugins: [react()],
   server: { port: 5173, open: true },

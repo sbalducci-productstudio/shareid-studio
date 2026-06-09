@@ -94,8 +94,7 @@
   --line-loose: 1.5;
 
   /* ------------------------------------------------------------------
-     SEMANTICS — draft, pending sign-off
-     Components consume these. Never primitives directly.
+     SEMANTICS — brand-bound. Components consume these, never primitives.
      ------------------------------------------------------------------ */
 
   /* Surfaces */
@@ -105,7 +104,7 @@
   --surface-success: var(--color-success);
   --surface-error: var(--color-error);
   --surface-critical: var(--color-red);           /* destructive — rare */
-  --surface-inverse: var(--color-black);          /* dark overlays, tip pills */
+  --surface-inverse: var(--color-black);          /* dark overlays, tip pills, code panels */
 
   /* Borders */
   --border-default: var(--color-light-gray);
@@ -127,6 +126,85 @@
   /* Page chrome (not in code — sdk-wide convention) */
   --page-bg: var(--color-white);
   --hairline: var(--color-light-gray);
+
+  /* ==================================================================
+     APP TOKEN SYSTEM — the SINGLE source consumed by studio.css /
+     studio-views.css. Replaces the old parallel :root that lived in
+     studio.css. Three groups below: extended neutrals, status ramps,
+     accents. Brand primitives above remain the only "raw" colors.
+     ================================================================== */
+
+  /* ---- Extended neutrals --------------------------------------------
+     Brand defines only --color-gray / --color-light-gray. The product
+     UI needs a fuller neutral scale; these are promoted VERBATIM from
+     in-product use (no value invented). Not in colors.json.
+     ------------------------------------------------------------------ */
+  --ink:          var(--color-black);   /* body text — brand-aligned (was #0E1116) */
+  --ink-2:        #2B2F36;              /* near-black emphasis (step done) */
+  --text-strong:  #3A3F47;              /* form / chart labels */
+  --text-nav:     #54585F;              /* nav idle, step label */
+  --panel:        #F4F5F7;              /* section background */
+  --panel-2:      #FAFAFB;              /* card / inset background */
+  --panel-3:      #FBFBFC;              /* table header background */
+  --line:         var(--color-light-gray);  /* #EBEBEB — hairline (brand) */
+  --line-strong:  var(--border-strong);     /* #DEDEE2 (brand semantic) */
+  --muted:        #6B7079;              /* secondary text */
+  --muted-soft:   #9498A0;              /* tertiary text / placeholders */
+  --neutral-bg:   #F0F1F3;              /* neutral tag / badge bg */
+  --neutral-ink:  #5A5F69;              /* neutral tag / badge text */
+
+  /* code panel (dark) — syntax tints, promoted verbatim */
+  --code-bg:      var(--surface-inverse);   /* brand black — was #0E1116 */
+  --code-fg:      #CFD3DA;
+  --code-key:     #8AA0E8;
+  --code-str:     #9ED29B;
+  --code-comment: var(--muted);             /* #6B7079 */
+
+  /* ---- Status ramps -------------------------------------------------
+     Bases ARE brand primitives (colors.json). Tints/text are
+     deterministic color-mix derivations of those bases — NOT new
+     colors. This is the brand-aligned set (replaces the old divergent
+     --good #1B8A2C / --warn #B6451F locals).
+     ------------------------------------------------------------------ */
+  /* success — base #2EC834 (brand) */
+  --good:       var(--color-success);
+  --good-bg:    color-mix(in srgb, var(--color-success) 14%, #fff);
+  --good-fill:  color-mix(in srgb, var(--color-success) 26%, #fff);  /* icon chip bg */
+  --good-line:  color-mix(in srgb, var(--color-success) 34%, #fff);  /* border on tint */
+  --good-text:  color-mix(in srgb, var(--color-success) 62%, #000);  /* glyph / text on tint */
+  /* danger — base #DD6342 (brand) */
+  --warn:       var(--color-error);
+  --warn-bg:    color-mix(in srgb, var(--color-error) 14%, #fff);
+  --warn-fill:  color-mix(in srgb, var(--color-error) 26%, #fff);
+  --warn-line:  color-mix(in srgb, var(--color-error) 34%, #fff);
+  --warn-text:  color-mix(in srgb, var(--color-error) 60%, #000);
+  /* info — base --color-main */
+  --info:       var(--color-main);
+  --info-bg:    color-mix(in srgb, var(--color-main) 8%, #fff);
+
+  /* ---- Caution (amber) + role accents -------------------------------
+     No brand source (colors.json has no amber / per-role identity).
+     Promoted VERBATIM from in-product use — values unchanged, flagged
+     extended. If the brand ever defines these, re-bind here.
+     ------------------------------------------------------------------ */
+  --amber:        #C9851F;   /* caution bar / fill */
+  --amber-strong: #A8631A;   /* caution text on tint */
+  --amber-bg:     #FFF1E2;
+  --amber-bg-2:   #FFF8EE;   /* alert card bg */
+  --amber-line:   #F2DDB8;
+  --amber-fill:   #F7E2B5;   /* icon chip bg */
+  --amber-ico:    #9A6B12;   /* icon glyph */
+  --amber-text:   #7A5410;   /* heading on tint */
+  --amber-test-bg:   #FFF6E8;  /* test-mode pill */
+  --amber-test-text: #9A6700;
+  --amber-test-dot:  #E0A100;
+
+  --role-expert-bg:   #F1ECFB;  --role-expert:   #6B3FA8;
+  --role-retailer-bg: #FBEFEA;  --role-retailer: #B0492B;
+  --role-group-bg:    #EAF1FB;  --role-group:    #2C5BB8;
+
+  /* tinted body text used on info banners (extended) */
+  --info-text:    #2F3A63;
 
   /* ------------------------------------------------------------------
      SEMANTIC TYPOGRAPHY — maps onto code styles

@@ -93,6 +93,7 @@ npm run test:watch
 - **UI 100 % en français** (c'est un produit FR). Code, noms de variables et commentaires structurels en anglais ; commentaires explicatifs peuvent être en français.
 - **Jamais « eIDAS » dans l'UI** → « niveau de risque » (voir règle plus haut).
 - **Toute logique d'accès dérive d'`access.js`** — ne pas dupliquer la matrice, ne pas faire de check de rôle en dur dans un composant.
+- **Toute couleur dérive du DS** (`public/ds/colors_and_type.css`, source unique) — jamais de hex en dur dans `studio.css` / `studio-views.css` (sauf `#fff`/`#000` et ombres `rgba`). Nouvelle teinte = nouveau token documenté ; nuance = `color-mix` d'une primitive marque, pas une valeur inventée.
 - **Tester la logique critique** : tout changement à `access.js` ou `selectors.js` → mettre à jour / étendre les tests. Ne pas merger avec une suite rouge.
 - Petites itérations, build vert avant push.
 
@@ -112,8 +113,13 @@ npm run test:watch
 - ✅ Build prod OK (~98 kB gzip).
 - ✅ Couche d'accès complète et fidèle au Sheet (entités, 8 rôles, actions, visibilité, multi-org, ownership).
 - ✅ Workflow Builder, Business Setup (création + édition + normalisation legacy), Console, Requêtes, outil QA View As : tous opérationnels.
+- ✅ **Design system unifié** : un seul fichier de tokens (`public/ds/colors_and_type.css`) est la source unique. `studio.css` / `studio-views.css` ne contiennent plus de `:root` parallèle ni de hex en dur (hors `#fff`/`#000` = blanc/noir marque, et ombres `rgba`). Palette étendue documentée (neutres, ambre, accents rôles) ; ramps de statut **dérivés des primitives marque** par `color-mix` (rien d'inventé). Contraste texte vérifié ≥ 4.5:1 (WCAG AA).
 
-**Dernier travail (8 juin)** : outil QA rôles & permissions (View As, multi-org, cas conditionnels ◐) ;
+**Dernier travail (9 juin)** : réconciliation du design system en source unique, alignée marque
+(succès `#2EC834` / erreur `#DD6342` / noir `#000000`) — base vive sur les remplissages, nuance
+dérivée foncée sur les textes pour la lisibilité.
+
+**Avant (8 juin)** : outil QA rôles & permissions (View As, multi-org, cas conditionnels ◐) ;
 fix édition d'un business existant ; ajout de la couche d'accès.
 
 **Pistes / à venir** :

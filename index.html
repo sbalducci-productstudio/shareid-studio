@@ -3,12 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="icon" href="%BASE_URL%ds/logo-shareid.svg" />
+<link rel="icon" href="/ds/logo-shareid.svg" />
 <title>ShareID Studio — Workflow Builder</title>
-<!-- Design system + app styles, servis tels quels depuis public/ (CSS identique au prototype) -->
-<link rel="stylesheet" href="%BASE_URL%ds/colors_and_type.css" />
-<link rel="stylesheet" href="%BASE_URL%studio.css" />
-<link rel="stylesheet" href="%BASE_URL%studio-views.css" />
+<!-- Design system + app styles, servis depuis public/. Chemins root-absolus :
+     Vite préfixe `base` une seule fois (dev ET build). NE PAS utiliser %BASE_URL%
+     ici → il se dédouble en dev (/shareid-studio/shareid-studio/...) et casse les CSS. -->
+<link rel="stylesheet" href="/ds/colors_and_type.css" />
+<link rel="stylesheet" href="/studio.css" />
+<link rel="stylesheet" href="/studio-views.css" />
 </head>
 <body>
 <div id="root"></div>
